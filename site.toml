@@ -1,0 +1,31 @@
+[site]
+name = "rts"
+url = ""
+description = "A minimal website displaying rts"
+category = "high-end"
+
+[site.tech]
+stack = ["HTML", "CSS"]
+hosting = ""
+hosting_access_granted = false
+
+[site.assets]
+images = []                                   # e.g. ["public/assets/hero.png"]
+videos = []                                   # e.g. ["public/assets/intro.mp4"]
+models_3d = []                                # e.g. ["public/assets/globe.glb"]
+svgs = []                                     # e.g. ["public/assets/logo.svg"]
+
+[site.prd]
+file = "PRD.md"
+setup = "open index.html"
+backend = "None — static HTML"
+
+[[screenshots]]
+route = "/"
+file = "screenshots/home-desktop.png"
+device = "desktop"                            # desktop (1440x900) or mobile (390x844)
+
+[[screenshots]]
+route = "/"
+file = "screenshots/home-mobile.png"
+device = "mobile"

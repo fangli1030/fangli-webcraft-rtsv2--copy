@@ -1,0 +1,31 @@
+[site]
+name = "your-site-name"                       # Unique name (kebab-case)
+url = "https://your-site.vercel.app"          # Live deployed URL
+description = "A brief description of your site"
+category = "personal-intelligence"            # personal-intelligence | high-end | game-dev
+
+[site.tech]
+stack = ["Next.js", "Tailwind"]               # Frameworks/tools used
+hosting = "vercel"                            # Where it's hosted
+hosting_access_granted = false                # Set to true after adding aai_webcraft@meta.com as owner
+
+[site.assets]
+images = []                                   # e.g. ["public/assets/hero.png"]
+videos = []                                   # e.g. ["public/assets/intro.mp4"]
+models_3d = []                                # e.g. ["public/assets/globe.glb"]
+svgs = []                                     # e.g. ["public/assets/logo.svg"]
+
+[site.prd]
+file = "PRD.md"
+setup = "npm install && npm run dev"          # How to run locally
+backend = "Describe your backend setup here"
+
+[[screenshots]]
+route = "/"
+file = "screenshots/home-desktop.png"
+device = "desktop"                            # desktop (1440x900) or mobile (390x844)
+
+[[screenshots]]
+route = "/"
+file = "screenshots/home-mobile.png"
+device = "mobile"

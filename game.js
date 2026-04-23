@@ -72,7 +72,7 @@ class GameRenderer {
     this.placementMode = null;
     this._leaderboardOpen = true;
     this._helpOpen = false;
-    this._lastTroops = 0; this._troopRate = 0; this._troopRateTimer = 0;
+    this._lastTroops = 0; this._troopRate = 0; this._troopRateTimer = performance.now();
     this._lastGold = 0; this._goldRate = 0;
     this._contextMenu = null;
 
@@ -147,6 +147,19 @@ class GameRenderer {
       const dk = c2 => toU32((c2.r * 0.6)|0, (c2.g * 0.6)|0, (c2.b * 0.6)|0);
       return [0, dk(c), dk(lerpColor(c, tan, 0.15)), dk(lerpColor(c, white, 0.25))];
     });
+    const terrainRgb = [null, {r:110,g:158,b:72}, {r:186,g:166,b:108}, {r:210,g:206,b:198}];
+    const blendAmounts = [1.0, 0.7, 0.4, 0.2];
+    this.playerGrad = PLAYER_COLORS.map(hex => {
+      const c = hexToRgb(hex);
+      const tinted = [null, c, lerpColor(c, tan, 0.15), lerpColor(c, white, 0.25)];
+      return blendAmounts.map(blend => {
+        return [0,
+          toU32(...Object.values(lerpColor(terrainRgb[1], tinted[1], blend))),
+          toU32(...Object.values(lerpColor(terrainRgb[2], tinted[2], blend))),
+          toU32(...Object.values(lerpColor(terrainRgb[3], tinted[3], blend)))
+        ];
+      });
+    });
   }
 
   async startWorker(mapId) {
@@ -171,6 +184,7 @@ class GameRenderer {
     this.grid = new Int8Array(GRID_W * GRID_H).fill(-2);
     this.borderMap = new Uint8Array(GRID_W * GRID_H);
     this.defendedMap = new Uint8Array(GRID_W * GRID_H);
+    this.distMap = new Uint8Array(GRID_W * GRID_H).fill(255);
 
     for (let i = 0; i < mapTerrain.length; i++) {
       const b = mapTerrain[i], isLand = (b >> 7) & 1, mag = b & 0x1f;
@@ -181,7 +195,8 @@ class GameRenderer {
     }
 
     const R = CONFIG.STARTING_RADIUS;
-    for (let p = 0; p < STARTING_POSITIONS.length; p++) {
+    const startIdx = this.spectateMode ? 1 : 0;
+    for (let p = startIdx; p < STARTING_POSITIONS.length; p++) {
       const { gx: sx, gy: sy } = STARTING_POSITIONS[p];
       for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
         if (dx * dx + dy * dy > R * R) continue;
@@ -199,13 +214,26 @@ class GameRenderer {
       if (msg.type === 'init_done') {
         if (msg.fullGrid) {
           const fg = msg.fullGrid;
+          let changed = 0;
           for (let i = 0; i < fg.length; i++) {
+            if (this.grid[i] !== fg[i]) changed++;
             this.grid[i] = fg[i];
           }
+          console.log('[landing] received fullGrid, changed cells:', changed);
         }
         this.fullRedraw();
         if (!this.spectateMode) this.setupInput();
         this.ready = true;
+        if (!this.spectateMode) {
+          this._introStart = performance.now();
+          this._introDuration = 1500;
+          this._introFromZoom = this.fitZoom * 0.3;
+          this._introToZoom = this.fitZoom;
+          this.zoom = this._introFromZoom;
+          const w = this.canvas.width, h = this.canvas.height;
+          this.camX = (CONFIG.WIDTH - w / this.zoom) / 2;
+          this.camY = (CONFIG.HEIGHT - h / this.zoom) / 2;
+        }
       }
       if (msg.type === 'tick') {
         const ch = new Int32Array(msg.changes);
@@ -275,10 +303,10 @@ class GameRenderer {
   calcBorder(idx) {
     const o = this.grid[idx]; if (o < 0) return false;
     const x = idx % GRID_W, y = (idx / GRID_W) | 0;
-    return (x > 0 && this.grid[idx-1] !== o && this.terrain[idx-1] > 0) ||
-           (x < GRID_W-1 && this.grid[idx+1] !== o && this.terrain[idx+1] > 0) ||
-           (y > 0 && this.grid[idx-GRID_W] !== o && this.terrain[idx-GRID_W] > 0) ||
-           (y < GRID_H-1 && this.grid[idx+GRID_W] !== o && this.terrain[idx+GRID_W] > 0);
+    return (x > 0 && this.grid[idx-1] !== o) ||
+           (x < GRID_W-1 && this.grid[idx+1] !== o) ||
+           (y > 0 && this.grid[idx-GRID_W] !== o) ||
+           (y < GRID_H-1 && this.grid[idx+GRID_W] !== o);
   }
 
   calcDefended(idx) {
@@ -293,6 +321,69 @@ class GameRenderer {
     return false;
   }
 
+  calcDistMap() {
+    const dm = this.distMap;
+    dm.fill(255);
+    const queue = [];
+    for (let i = 0; i < GRID_W * GRID_H; i++) {
+      if (this.borderMap[i]) { dm[i] = 0; queue.push(i); }
+    }
+    let head = 0;
+    while (head < queue.length) {
+      const idx = queue[head++];
+      const d = dm[idx] + 1;
+      if (d > 3) continue;
+      const o = this.grid[idx], x = idx % GRID_W, y = (idx / GRID_W) | 0;
+      const nbrs = [];
+      if (x > 0) nbrs.push(idx - 1);
+      if (x < GRID_W - 1) nbrs.push(idx + 1);
+      if (y > 0) nbrs.push(idx - GRID_W);
+      if (y < GRID_H - 1) nbrs.push(idx + GRID_W);
+      for (const ni of nbrs) {
+        if (this.grid[ni] === o && dm[ni] > d) {
+          dm[ni] = d;
+          queue.push(ni);
+        }
+      }
+    }
+  }
+
+  updateDistMapLocal(centerIdx) {
+    const R = 6;
+    const cx = centerIdx % GRID_W, cy = (centerIdx / GRID_W) | 0;
+    const x0 = Math.max(0, cx - R), x1 = Math.min(GRID_W - 1, cx + R);
+    const y0 = Math.max(0, cy - R), y1 = Math.min(GRID_H - 1, cy + R);
+    const dm = this.distMap;
+    const affected = [];
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const i = y * GRID_W + x;
+      if (this.grid[i] >= 0) { dm[i] = 255; affected.push(i); }
+    }
+    const queue = [];
+    for (const i of affected) {
+      if (this.borderMap[i]) { dm[i] = 0; queue.push(i); }
+    }
+    let head = 0;
+    while (head < queue.length) {
+      const idx = queue[head++];
+      const d = dm[idx] + 1;
+      if (d > 3) continue;
+      const o = this.grid[idx], x = idx % GRID_W, y = (idx / GRID_W) | 0;
+      const nbrs = [];
+      if (x > 0) nbrs.push(idx - 1);
+      if (x < GRID_W - 1) nbrs.push(idx + 1);
+      if (y > 0) nbrs.push(idx - GRID_W);
+      if (y < GRID_H - 1) nbrs.push(idx + GRID_W);
+      for (const ni of nbrs) {
+        if (this.grid[ni] === o && dm[ni] > d) {
+          dm[ni] = d;
+          queue.push(ni);
+        }
+      }
+    }
+    for (const i of affected) this.paintCell(i);
+  }
+
   paintCell(idx) {
     const o = this.grid[idx], t = this.terrain[idx];
     if (t === 0) this.data32[idx] = this.waterC[idx];
@@ -301,7 +392,10 @@ class GameRenderer {
       const gx = idx % GRID_W, gy = (idx / GRID_W) | 0;
       this.data32[idx] = (gx + gy) % 2 === 0 ? this.playerDefBCLight[o][t] : this.playerDefBCDark[o][t];
     }
-    else this.data32[idx] = this.borderMap[idx] ? this.playerBC[o][t] : this.playerC[o][t];
+    else {
+      const d = Math.min(this.distMap[idx], 3);
+      this.data32[idx] = this.borderMap[idx] ? this.playerBC[o][t] : this.playerGrad[o][d][t];
+    }
   }
 
   applyChange(idx, newOwner) {
@@ -315,16 +409,17 @@ class GameRenderer {
     for (const i of cells) {
       this.borderMap[i] = (this.grid[i] >= 0 && this.calcBorder(i)) ? 1 : 0;
       this.defendedMap[i] = (this.borderMap[i] && this.calcDefended(i)) ? 1 : 0;
-      this.paintCell(i);
     }
+    this.updateDistMapLocal(idx);
   }
 
   fullRedraw() {
     for (let i = 0; i < GRID_W * GRID_H; i++) {
       if (this.grid[i] >= 0) this.borderMap[i] = this.calcBorder(i) ? 1 : 0;
       this.defendedMap[i] = (this.borderMap[i] && this.calcDefended(i)) ? 1 : 0;
-      this.paintCell(i);
     }
+    this.calcDistMap();
+    for (let i = 0; i < GRID_W * GRID_H; i++) this.paintCell(i);
   }
 
   refreshDefendedMap() {
@@ -434,6 +529,14 @@ class GameRenderer {
       const { gx, gy } = this.screenToGame(e.clientX, e.clientY);
       this._hoverGx = gx; this._hoverGy = gy;
 
+      const { cx: hcx, cy: hcy } = this.screenToCanvas(e.clientX, e.clientY);
+      const hBarInfo = this._getBottomBarLayout();
+      const overBar = hBarInfo && hcy >= hBarInfo.y && hcy <= hBarInfo.y + hBarInfo.h && hcx >= hBarInfo.x && hcx <= hBarInfo.x + hBarInfo.w;
+      const helpX = this.canvas.width - 30, helpY = 30;
+      const overHelp = (hcx - helpX) ** 2 + (hcy - helpY) ** 2 < 225;
+      const overLeaderboard = hcx < 200 && hcy < 24;
+      this._hoverUI = overBar || overHelp || overLeaderboard;
+
       if (this.placementMode && ['farm','mine','mill','factory'].includes(this.placementMode)) {
         if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H)
           this.worker.postMessage({ type: 'preview_econ', gx, gy, buildType: this.placementMode });
@@ -523,14 +626,33 @@ class GameRenderer {
   render() {
     if (this._destroyed) return;
     if (this.ready) {
-      this.canvas.style.cursor = this.placementMode ? 'cell' : 'crosshair';
-      const panSpeed = 4 / this.zoom;
-      if (this._keysDown && this._keysDown.size) {
-        if (this._keysDown.has('w')) this.camY -= panSpeed;
-        if (this._keysDown.has('s')) this.camY += panSpeed;
-        if (this._keysDown.has('a')) this.camX -= panSpeed;
-        if (this._keysDown.has('d')) this.camX += panSpeed;
-        this.clampCamera();
+      if (this._introStart) {
+        const t = Math.min(1, (performance.now() - this._introStart) / this._introDuration);
+        const e = 1 - Math.pow(1 - t, 3);
+        this.zoom = this._introFromZoom + (this._introToZoom - this._introFromZoom) * e;
+        const w = this.canvas.width, h = this.canvas.height;
+        this.camX = (CONFIG.WIDTH - w / this.zoom) / 2;
+        this.camY = (CONFIG.HEIGHT - h / this.zoom) / 2;
+        if (t >= 1) this._introStart = null;
+      } else {
+        const pd = this.playerData[0];
+        if (this._hoverUI) {
+          this.canvas.style.cursor = 'pointer';
+        } else if (this.placementMode) {
+          this.canvas.style.cursor = 'cell';
+        } else if (pd && pd.expanding && pd.attackTarget !== null) {
+          this.canvas.style.cursor = 'crosshair';
+        } else {
+          this.canvas.style.cursor = 'default';
+        }
+        const panSpeed = 4 / this.zoom;
+        if (this._keysDown && this._keysDown.size) {
+          if (this._keysDown.has('w')) this.camY -= panSpeed;
+          if (this._keysDown.has('s')) this.camY += panSpeed;
+          if (this._keysDown.has('a')) this.camX -= panSpeed;
+          if (this._keysDown.has('d')) this.camX += panSpeed;
+          this.clampCamera();
+        }
       }
 
       this.bufCtx.putImageData(this.imageData, 0, 0);
@@ -696,10 +818,8 @@ class GameRenderer {
       const name = i === 0 ? this.playerName : PLAYER_NAMES[i];
       const sz = Math.max(8, Math.min(18, Math.sqrt(p.cn) * 0.06)) / Math.max(1, this.zoom * 0.5);
       ctx.font = `bold ${sz}px sans-serif`;
-      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(name, p.cx + 1, p.cy - sz * 0.35 + 1);
       ctx.fillStyle = '#ffffff'; ctx.fillText(name, p.cx, p.cy - sz * 0.35);
       ctx.font = `${(sz * 0.85)|0}px monospace`;
-      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(formatTroops(p.troops), p.cx + 1, p.cy + sz * 0.5 + 1);
       ctx.fillStyle = '#ffffffcc'; ctx.fillText(formatTroops(p.troops), p.cx, p.cy + sz * 0.5);
     }
     ctx.restore();
@@ -746,7 +866,7 @@ class GameRenderer {
     ctx.fillText(rateStr, bar.x + 10 + rateW / 2, row1Y + pillH / 2);
 
     // Gold pill (right)
-    const goldRateStr = this._goldRate > 0 ? ` +${this._goldRate.toFixed(0)}/m` : '';
+    const goldRateStr = ` +${Math.max(0, this._goldRate).toFixed(0)}/m`;
     const goldStr = `${Math.floor(gold)}g${goldRateStr}`;
     const goldW = ctx.measureText(goldStr).width + 20;
     ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;

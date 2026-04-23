@@ -3,13 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RTS India</title>
+  <title>Meta RTS</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="game-container">
-    <canvas id="game-canvas"></canvas>
-    <div id="info-panel"></div>
+  <canvas id="game-canvas"></canvas>
+  <div id="landing-overlay">
+    <div class="landing-content">
+      <h1 class="landing-title">Meta RTS</h1>
+      <div class="landing-input-row">
+        <input type="text" id="player-name" placeholder="Enter your name" maxlength="20" autocomplete="off" spellcheck="false">
+      </div>
+      <button id="play-btn">Play</button>
+    </div>
   </div>
   <script src="game.js"></script>
 </body>

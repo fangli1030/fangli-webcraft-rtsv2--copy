@@ -29,6 +29,7 @@ const MAX_BOATS = 3;
 const BOAT_TROOP_FRACTION = 0.2;
 
 let GRID_W, GRID_H, NUM_BOTS, CELLS_PER_TICK, EXPANSION_TICK_MS, BOT_THINK_MS;
+let isSpectateMode = false;
 let grid, terrain, playerStates;
 let tileChanges = [];
 let centersSumX, centersSumY, centersN;
@@ -204,8 +205,12 @@ function checkElimination() {
     const ps = playerStates[i];
     if (ps.alive && ps.cellCount <= 0) { ps.alive = false; ps.expanding = false; ps.attackTarget = null; }
   }
-  if (!playerStates[0].alive) go = true;
-  else if (playerStates.filter(ps => ps.alive).length <= 1) { go = true; w = playerStates[0].alive ? 0 : null; }
+  if (isSpectateMode) {
+    if (playerStates.filter(ps => ps.alive).length <= 1) go = true;
+  } else {
+    if (!playerStates[0].alive) go = true;
+    else if (playerStates.filter(ps => ps.alive).length <= 1) { go = true; w = playerStates[0].alive ? 0 : null; }
+  }
   return { gameOver: go, winner: w };
 }
 
@@ -643,11 +648,11 @@ function processBoats() {
   }
 }
 
-function botThinkAll() {
-  const now = performance.now();
+function botThinkAllAt(now) {
   const bordered = Array.from({ length: playerStates.length }, () => new Set());
   let needsBorders = false;
-  for (let i = 1; i <= NUM_BOTS; i++) {
+  const startIdx = isSpectateMode ? 0 : 1;
+  for (let i = startIdx; i <= NUM_BOTS; i++) {
     const ps = playerStates[i];
     if (ps.alive && now >= ps.nextAttackTick) needsBorders = true;
   }
@@ -665,9 +670,13 @@ function botThinkAll() {
       }
     }
   }
-  for (let i = 1; i <= NUM_BOTS; i++) {
+  for (let i = startIdx; i <= NUM_BOTS; i++) {
     if (now >= playerStates[i].nextAttackTick) botThinkSingle(i, bordered[i], now);
   }
+}
+
+function botThinkAll() {
+  botThinkAllAt(performance.now());
 }
 
 function botThinkSingle(id, borders, now) {
@@ -698,7 +707,8 @@ function botThinkSingle(id, borders, now) {
 
   // 1. WILDERNESS FIRST — always expand into unclaimed land if available
   if (hasWild && ps.troops > max * 0.1) {
-    const send = Math.floor(ps.troops * 0.08);
+    const wildRatio = isSpectateMode ? 0.25 : 0.08;
+    const send = Math.floor(ps.troops * wildRatio);
     if (send >= 1) {
       ps.troops -= send; ps.attackTroops = send;
       ps.attackTarget = -1; ps.expanding = true;
@@ -764,6 +774,9 @@ self.onmessage = function(e) {
   if (msg.type === 'init') {
     GRID_W = msg.gridW; GRID_H = msg.gridH; NUM_BOTS = msg.numBots;
     CELLS_PER_TICK = msg.cellsPerTick; EXPANSION_TICK_MS = msg.expansionTickMs; BOT_THINK_MS = msg.botThinkMs;
+    const spectate = msg.spectateMode;
+    isSpectateMode = !!spectate;
+    if (spectate) CELLS_PER_TICK = Math.max(CELLS_PER_TICK, 20);
 
     // Accept pre-built terrain and grid from main thread (decoded from map.bin)
     terrain = new Uint8Array(msg.terrain);
@@ -772,14 +785,14 @@ self.onmessage = function(e) {
     playerStates = [];
     for (let i = 0; i <= NUM_BOTS; i++)
       playerStates.push({
-        troops: i === 0 ? msg.startingTroops : msg.startingTroops * 0.5,
+        troops: spectate ? msg.startingTroops * 3 : (i === 0 ? msg.startingTroops : msg.startingTroops * 0.5),
         cellCount: 0, alive: true, expanding: false, attackTarget: null,
-        borderTiles: new Set(), attackTroops: 0, gold: i === 0 ? 300 : 0, cityCount: 0, dpostCount: 0,
-        isBot: i > 0,
-        reserveRatio: 0.3 + Math.random() * 0.1,
-        triggerRatio: 0.5 + Math.random() * 0.1,
-        attackCooldown: 400 + Math.random() * 400,
-        nextAttackTick: performance.now() + 2000 + Math.random() * 3000,
+        borderTiles: new Set(), attackTroops: 0, gold: i === 0 && !spectate ? 300 : 0, cityCount: 0, dpostCount: 0,
+        isBot: spectate || i > 0,
+        reserveRatio: spectate ? 0.1 + Math.random() * 0.05 : 0.3 + Math.random() * 0.1,
+        triggerRatio: spectate ? 0.2 + Math.random() * 0.1 : 0.5 + Math.random() * 0.1,
+        attackCooldown: spectate ? 200 + Math.random() * 200 : 400 + Math.random() * 400,
+        nextAttackTick: spectate ? performance.now() + 500 + Math.random() * 1000 : performance.now() + 2000 + Math.random() * 3000,
       });
     centersSumX = new Float64Array(playerStates.length);
     centersSumY = new Float64Array(playerStates.length);
@@ -803,7 +816,30 @@ self.onmessage = function(e) {
     }
 
     terrainClaimed = new Uint8Array(GRID_W * GRID_H);
-    self.postMessage({ type: 'init_done' });
+
+    if (spectate) {
+      const simTicks = 2400;
+      const simDt = 50;
+      const baseTime = performance.now();
+      for (let t = 0; t < simTicks; t++) {
+        const simNow = baseTime + t * simDt;
+        generateTroops(simDt);
+        processExpansions();
+        botThinkAllAt(simNow);
+        for (let i = 0; i < playerStates.length; i++) {
+          const ps = playerStates[i];
+          if (ps.alive && ps.cellCount <= 0) { ps.alive = false; ps.expanding = false; ps.attackTarget = null; }
+        }
+        if (playerStates.filter(ps => ps.alive).length <= 1) break;
+      }
+      tileChanges = [];
+      const realNow = performance.now();
+      for (const ps of playerStates) {
+        ps.nextAttackTick = realNow + ps.attackCooldown * Math.random();
+      }
+    }
+
+    self.postMessage({ type: 'init_done', fullGrid: spectate ? Array.from(grid) : null });
     lastTime = performance.now();
     setInterval(tick, 50);
   }

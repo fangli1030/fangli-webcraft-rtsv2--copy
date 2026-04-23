@@ -258,7 +258,11 @@ class GameRenderer {
           this._troopRate = currentTroops - this._lastTroops;
           this._lastTroops = currentTroops;
           const currentGold = this.playerData[0].gold || 0;
-          this._goldRate = (currentGold - this._lastGold) * 60;
+          // Only update gold rate if gold increased (income), not if it decreased (spending)
+          const goldDelta = currentGold - this._lastGold;
+          if (goldDelta >= 0) {
+            this._goldRate = goldDelta * 60;
+          }
           this._lastGold = currentGold;
           this._troopRateTimer = now;
         }
@@ -866,7 +870,7 @@ class GameRenderer {
     ctx.fillText(rateStr, bar.x + 10 + rateW / 2, row1Y + pillH / 2);
 
     // Gold pill (right)
-    const goldRateStr = ` +${Math.max(0, this._goldRate).toFixed(0)}/m`;
+    const goldRateStr = ` +${this._goldRate.toFixed(0)}/m`;
     const goldStr = `${Math.floor(gold)}g${goldRateStr}`;
     const goldW = ctx.measureText(goldStr).width + 20;
     ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;

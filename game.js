@@ -72,9 +72,13 @@ class GameRenderer {
     this.placementMode = null;
     this._leaderboardOpen = true;
     this._helpOpen = false;
-    this._lastTroops = 0; this._troopRate = 0; this._troopRateTimer = performance.now();
+    this._lastTroops = 0; this._troopRate = 0; this._troopRateTimer = 0;
     this._lastGold = 0; this._goldRate = 0;
     this._contextMenu = null;
+    this._tutorialActive = false;
+    this._tutorialStep = 0;
+    this._tutorialSteps = [];
+    this._tutorialCompleted = {};
 
     this.resizeCanvas();
     this.zoom = this.fitZoom || this.minZoom;
@@ -255,9 +259,24 @@ class GameRenderer {
         const now = performance.now();
         if (this.playerData[0] && now - this._troopRateTimer > 1000) {
           const currentTroops = this.playerData[0].troops + (this.playerData[0].attackTroops || 0);
+          const currentGold = this.playerData[0].gold || 0;
+          
+          // On first measurement, initialize baselines and calculate initial gold rate from cell count
+          if (this._troopRateTimer === 0) {
+            this._lastTroops = currentTroops;
+            this._lastGold = currentGold;
+            // Calculate base gold rate from starting cell count: (0.02 + cellCount * 0.0001) * 60 ticks/min * 10 (dt=100)
+            const cellCount = this.playerData[0].cellCount || 0;
+            const baseGoldPerSec = 0.02 + cellCount * 0.0001;
+            this._goldRate = baseGoldPerSec * 60 * 10; // 60 seconds/min * 10 ticks per second (100ms dt)
+            this._troopRateTimer = now;
+            return;
+          }
+          
+          // Calculate troop rate
           this._troopRate = currentTroops - this._lastTroops;
           this._lastTroops = currentTroops;
-          const currentGold = this.playerData[0].gold || 0;
+          
           // Only update gold rate if gold increased (income), not if it decreased (spending)
           const goldDelta = currentGold - this._lastGold;
           if (goldDelta >= 0) {

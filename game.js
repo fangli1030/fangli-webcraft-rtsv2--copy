@@ -72,9 +72,23 @@ class GameRenderer {
     this.placementMode = null;
     this._leaderboardOpen = true;
     this._helpOpen = false;
-    this._lastTroops = 0; this._troopRate = 0; this._troopRateTimer = performance.now();
+    this._lastTroops = 0; this._troopRate = 0; this._troopRateTimer = 0;
     this._lastGold = 0; this._goldRate = 0;
     this._contextMenu = null;
+    this._tutorialActive = false;
+    this._tutorialStep = 0;
+    this._tutorialSteps = [
+      { id: 'welcome', title: 'Welcome to Meta RTS!', text: "Let's learn the basics. Click to continue.", completionType: 'click_anywhere', highlight: null, arrowTarget: null },
+      { id: 'camera', title: 'Camera Controls', text: 'Use WASD to pan and scroll to zoom.', completionType: 'camera_controls', highlight: null, arrowTarget: null },
+      { id: 'expand', title: 'Expand Your Territory', text: 'Click unclaimed land near your border to expand.', completionType: 'expand_click', highlight: 'border', arrowTarget: null },
+      { id: 'attack', title: 'Attack Enemies', text: 'Click enemy territory to attack!', completionType: 'attack_click', highlight: 'enemy_border', arrowTarget: null },
+      { id: 'attack_slider', title: 'Attack Slider', text: 'Drag the slider to control troop allocation.', completionType: 'slider_drag', highlight: 'slider', arrowTarget: null },
+      { id: 'city', title: 'Place a City', text: 'Press 1, then click inside your territory. Cities increase max troops.', completionType: 'city_placed', highlight: 'build_btn_city', arrowTarget: null },
+      { id: 'defense_post', title: 'Place a Defense Post', text: 'Press 2, then click your border. They protect your borders.', completionType: 'defense_post_placed', highlight: 'build_btn_dpost', arrowTarget: null },
+      { id: 'boats', title: 'Send Boats', text: 'Right-click enemy territory across water to send troops by boat. Pan around to find enemy territory across water.', completionType: 'boat_launched', highlight: null, arrowTarget: null },
+      { id: 'complete', title: 'Tutorial Complete!', text: "You're ready! Good luck. Click to dismiss.", completionType: 'click_anywhere', highlight: null, arrowTarget: null },
+    ];
+    this._tutorialCompleted = {};
 
     this.resizeCanvas();
     this.zoom = this.fitZoom || this.minZoom;
@@ -250,15 +264,35 @@ class GameRenderer {
           this.animations.push({ type: 'dpost_destroy', idx: dd.idx, owner: dd.owner, startTime: performance.now(), duration: 800 });
         }
         if (dpostsChanged) this.refreshDefendedMap();
+        if (this._tutorialActive) this._checkTutorialCompletion('tick');
 
         // Troop rate calculation
         const now = performance.now();
         if (this.playerData[0] && now - this._troopRateTimer > 1000) {
           const currentTroops = this.playerData[0].troops + (this.playerData[0].attackTroops || 0);
+          const currentGold = this.playerData[0].gold || 0;
+          
+          // On first measurement, initialize baselines and calculate initial gold rate from cell count
+          if (this._troopRateTimer === 0) {
+            this._lastTroops = currentTroops;
+            this._lastGold = currentGold;
+            // Calculate base gold rate from starting cell count: (0.02 + cellCount * 0.0001) * 60 ticks/min * 10 (dt=100)
+            const cellCount = this.playerData[0].cellCount || 0;
+            const baseGoldPerSec = 0.02 + cellCount * 0.0001;
+            this._goldRate = baseGoldPerSec * 60 * 10; // 60 seconds/min * 10 ticks per second (100ms dt)
+            this._troopRateTimer = now;
+            return;
+          }
+          
+          // Calculate troop rate
           this._troopRate = currentTroops - this._lastTroops;
           this._lastTroops = currentTroops;
-          const currentGold = this.playerData[0].gold || 0;
-          this._goldRate = (currentGold - this._lastGold) * 60;
+          
+          // Only update gold rate if gold increased (income), not if it decreased (spending)
+          const goldDelta = currentGold - this._lastGold;
+          if (goldDelta >= 0) {
+            this._goldRate = goldDelta * 60;
+          }
           this._lastGold = currentGold;
           this._troopRateTimer = now;
         }
@@ -447,9 +481,21 @@ class GameRenderer {
     this._keysDown = new Set();
 
     window.addEventListener('keydown', e => {
-      if ('wasd'.includes(e.key)) this._keysDown.add(e.key);
+      if ('wasd'.includes(e.key)) {
+        this._keysDown.add(e.key);
+        if (this._tutorialActive) this._checkTutorialCompletion('wasd');
+      }
       const hotkeyMap = { '1': 'city', '2': 'defense_post', '3': 'farm', '4': 'mine', '5': 'mill', '6': 'factory' };
       if (hotkeyMap[e.key]) {
+        // Tutorial input filtering for building hotkeys
+        if (this._tutorialActive) {
+          const step = this._tutorialSteps[this._tutorialStep];
+          if (step) {
+            if (step.id === 'city' && e.key !== '1') return;
+            if (step.id === 'defense_post' && e.key !== '2') return;
+            if (step.id === 'boats' || step.id === 'welcome' || step.id === 'camera' || step.id === 'complete') return;
+          }
+        }
         const mode = hotkeyMap[e.key];
         this.placementMode = this.placementMode === mode ? null : mode;
         this._buildPreview = null;
@@ -468,6 +514,7 @@ class GameRenderer {
       this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom / (1 + deltaY / 600)));
       this.camX = gameX - cx / this.zoom; this.camY = gameY - cy / this.zoom;
       this.clampCamera();
+      if (this._tutorialActive) this._checkTutorialCompletion('scroll');
     }, { passive: false });
 
     this.canvas.addEventListener('mousedown', (e) => {
@@ -570,7 +617,10 @@ class GameRenderer {
     });
 
     this.canvas.addEventListener('mouseup', (e) => {
-      if (this._draggingSlider) { this._draggingSlider = false; return; }
+      if (this._draggingSlider) {
+        if (this._tutorialActive) this._checkTutorialCompletion('slider');
+        this._draggingSlider = false; return;
+      }
 
       if (this._contextMenu && this._contextMenuClick) {
         this._contextMenuClick = false;
@@ -578,14 +628,43 @@ class GameRenderer {
         const { cx, cy } = this.screenToCanvas(e.clientX, e.clientY);
         const cmCanvas = this.screenToCanvas(cm.screenX, cm.screenY);
         const btnX = cmCanvas.cx, btnY = cmCanvas.cy - 40;
-        if (cx >= btnX - 18 && cx <= btnX + 18 && cy >= btnY - 14 && cy <= btnY + 14)
+        if (cx >= btnX - 18 && cx <= btnX + 18 && cy >= btnY - 14 && cy <= btnY + 14) {
+          if (this._tutorialActive) {
+            // Tutorial filtering for right-click boat
+            const step = this._tutorialSteps[this._tutorialStep];
+            if (!step || step.id !== 'boats') { this._contextMenu = null; return; }
+          }
           this.worker.postMessage({ type: 'rightclick', gx: cm.gx, gy: cm.gy });
+        }
         this._contextMenu = null; return;
       }
 
       if (this._mouseIsDown && !this._didDrag && !this.gameOver) {
         const { gx, gy } = this.screenToGame(e.clientX, e.clientY);
         if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H) {
+          // Tutorial click detection (before processing)
+          if (this._tutorialActive) this._checkTutorialCompletion('click', { gx, gy });
+
+          // Tutorial input filtering
+          if (this._tutorialActive) {
+            const step = this._tutorialSteps[this._tutorialStep];
+            if (step) {
+              // Block all clicks during welcome/camera/complete
+              if (step.id === 'welcome' || step.id === 'camera' || step.id === 'complete') {
+                this._mouseIsDown = false; this._didDrag = false;
+                return;
+              }
+              // Only allow wilderness clicks during expand step
+              if (step.id === 'expand' && this.grid) {
+                const idx = gy * GRID_W + gx;
+                if (this.grid[idx] !== -1) {
+                  this._mouseIsDown = false; this._didDrag = false;
+                  return;
+                }
+              }
+            }
+          }
+
           if (this.placementMode === 'city') {
             this.worker.postMessage({ type: 'place_city', gx, gy }); this.placementMode = null;
           } else if (this.placementMode === 'defense_post') {
@@ -866,7 +945,7 @@ class GameRenderer {
     ctx.fillText(rateStr, bar.x + 10 + rateW / 2, row1Y + pillH / 2);
 
     // Gold pill (right)
-    const goldRateStr = ` +${Math.max(0, this._goldRate).toFixed(0)}/m`;
+    const goldRateStr = ` +${this._goldRate.toFixed(0)}/m`;
     const goldStr = `${Math.floor(gold)}g${goldRateStr}`;
     const goldW = ctx.measureText(goldStr).width + 20;
     ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
@@ -994,6 +1073,218 @@ class GameRenderer {
       ctx.font = '18px sans-serif'; ctx.fillStyle = '#fff';
       ctx.fillText('Refresh to play again', this.canvas.width / 2, this.canvas.height / 2 + 30);
     }
+
+    if (this._tutorialActive) this.renderTutorial();
+  }
+
+  _initTutorial() {
+    this._tutorialStep = 0;
+    this._tutorialCompleted = {};
+  }
+
+  renderTutorial() {
+    if (this.gameOver) {
+      this._tutorialActive = false;
+      return;
+    }
+
+    const ctx = this.ctx;
+    const step = this._tutorialSteps[this._tutorialStep];
+    if (!step) return;
+
+    // Text box dimensions and position
+    const boxW = 420, boxH = 100;
+    const boxX = (this.canvas.width - boxW) / 2;
+    const boxY = 60;
+
+    // Draw text box background
+    ctx.fillStyle = 'rgba(22, 27, 34, 0.95)';
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, boxW, boxH, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    // Step counter
+    ctx.fillStyle = '#888';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${this._tutorialStep + 1}/${this._tutorialSteps.length}`, boxX + boxW - 12, boxY + 8);
+
+    // Title
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(step.title, boxX + 12, boxY + 12);
+
+    // Body text with wrapping
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px sans-serif';
+    const maxWidth = boxW - 24;
+    const words = step.text.split(' ');
+    let line = '';
+    let y = boxY + 38;
+    for (const word of words) {
+      const testLine = line + word + ' ';
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > maxWidth && line !== '') {
+        ctx.fillText(line, boxX + 12, y);
+        line = word + ' ';
+        y += 18;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, boxX + 12, y);
+
+    // Highlight region if specified
+    if (step.highlight) {
+      let highlightRect = null;
+
+      if (step.highlight === 'border' || step.highlight === 'enemy_border') {
+        // Compute from player centroids
+        const pd = this.playerData[0];
+        if (pd && pd.centroid) {
+          const screenX = (pd.centroid.x - this.camX) * this.zoom;
+          const screenY = (pd.centroid.y - this.camY) * this.zoom;
+          const size = Math.max(100, 200 / this.zoom);
+          highlightRect = { x: screenX - size/2, y: screenY - size/2, w: size, h: size };
+        }
+      } else if (step.highlight === 'slider') {
+        const bar = this._getBottomBarLayout();
+        highlightRect = { x: bar.x + bar.w * 0.05, y: bar.y + bar.h * 0.55, w: bar.w * 0.9, h: 20 };
+      } else if (step.highlight === 'build_btn_city') {
+        const bar = this._getBottomBarLayout();
+        const btnW = (bar.w - 20) / 4;
+        highlightRect = { x: bar.x + 10, y: bar.y + bar.h * 0.7, w: btnW, h: 40 };
+      } else if (step.highlight === 'build_btn_dpost') {
+        const bar = this._getBottomBarLayout();
+        const btnW = (bar.w - 20) / 4;
+        highlightRect = { x: bar.x + 10 + btnW + 5, y: bar.y + bar.h * 0.7, w: btnW, h: 40 };
+      }
+
+      if (highlightRect) {
+        // Dim everything except highlight region (draw 4 dark rects)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        // Top
+        ctx.fillRect(0, 0, this.canvas.width, highlightRect.y);
+        // Bottom
+        ctx.fillRect(0, highlightRect.y + highlightRect.h, this.canvas.width, this.canvas.height - (highlightRect.y + highlightRect.h));
+        // Left
+        ctx.fillRect(0, highlightRect.y, highlightRect.x, highlightRect.h);
+        // Right
+        ctx.fillRect(highlightRect.x + highlightRect.w, highlightRect.y, this.canvas.width - (highlightRect.x + highlightRect.w), highlightRect.h);
+
+        // Pulsing gold border
+        const pulse = Math.sin(performance.now() / 500) * 0.3 + 0.7;
+        ctx.strokeStyle = `rgba(255, 215, 0, ${pulse})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.rect(highlightRect.x, highlightRect.y, highlightRect.w, highlightRect.h);
+        ctx.stroke();
+
+        // Arrow from text box to highlight
+        this._drawArrow(ctx, boxX + boxW / 2, boxY + boxH, highlightRect.x + highlightRect.w / 2, highlightRect.y);
+      }
+    }
+  }
+
+  _drawArrow(ctx, fromX, fromY, toX, toY) {
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrowhead
+    const angle = Math.atan2(toY - fromY, toX - fromX);
+    const headLen = 12;
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  _checkTutorialCompletion(trigger, data) {
+    if (!this._tutorialActive) return;
+    const step = this._tutorialSteps[this._tutorialStep];
+    if (!step) return;
+
+    let shouldAdvance = false;
+
+    switch (step.completionType) {
+      case 'click_anywhere':
+        if (trigger === 'click') shouldAdvance = true;
+        break;
+      case 'camera_controls':
+        if (trigger === 'wasd') this._tutorialCompleted.wasd = true;
+        if (trigger === 'scroll') this._tutorialCompleted.scroll = true;
+        if (this._tutorialCompleted.wasd && this._tutorialCompleted.scroll) shouldAdvance = true;
+        break;
+      case 'expand_click':
+        if (trigger === 'click' && data && this.grid) {
+          const idx = data.gy * GRID_W + data.gx;
+          if (this.grid[idx] === -1) shouldAdvance = true;
+        }
+        break;
+      case 'attack_click':
+        if (trigger === 'click' && data && this.grid) {
+          const idx = data.gy * GRID_W + data.gx;
+          if (this.grid[idx] >= 1) shouldAdvance = true;
+        }
+        break;
+      case 'slider_drag':
+        if (trigger === 'slider') shouldAdvance = true;
+        break;
+      case 'city_placed':
+      case 'defense_post_placed':
+      case 'boat_launched':
+        // These are checked in the tick handler
+        if (trigger === 'tick') {
+          if (step.completionType === 'city_placed' && this.cities.filter(c => c.owner === 0).length > (this._tutorialCompleted.cityCount || 0)) {
+            shouldAdvance = true;
+          }
+          if (step.completionType === 'defense_post_placed' && this.defensePosts.filter(d => d.owner === 0).length > (this._tutorialCompleted.dpostCount || 0)) {
+            shouldAdvance = true;
+          }
+          if (step.completionType === 'boat_launched' && this.boats.filter(b => b.owner === 0).length > (this._tutorialCompleted.boatCount || 0)) {
+            shouldAdvance = true;
+          }
+        }
+        break;
+    }
+
+    if (shouldAdvance) this._advanceTutorial();
+  }
+
+  _advanceTutorial() {
+    this._tutorialStep++;
+    this._tutorialCompleted = {};
+
+    // Save baseline counts for tick-based detection
+    this._tutorialCompleted.cityCount = this.cities.filter(c => c.owner === 0).length;
+    this._tutorialCompleted.dpostCount = this.defensePosts.filter(d => d.owner === 0).length;
+    this._tutorialCompleted.boatCount = this.boats.filter(b => b.owner === 0).length;
+
+    // Grant gold for building steps
+    const step = this._tutorialSteps[this._tutorialStep];
+    if (step && (step.id === 'city' || step.id === 'defense_post')) {
+      if (this.worker) this.worker.postMessage({ type: 'grant_gold', amount: 200 });
+    }
+
+    // End tutorial on final step completion
+    if (this._tutorialStep >= this._tutorialSteps.length) {
+      this._tutorialActive = false;
+    }
   }
 }
 
@@ -1016,7 +1307,19 @@ window.addEventListener('load', () => {
     renderer.render();
   }
 
+  function startTutorialGame() {
+    const name = nameInput.value.trim() || 'Player';
+    bgRenderer.destroy();
+    overlay.classList.add('hidden');
+    const renderer = new GameRenderer(canvas, 'india_small', name);
+    renderer._tutorialActive = true;
+    renderer._initTutorial();
+    renderer.render();
+  }
+
   playBtn.addEventListener('click', startGame);
+  const tutorialBtn = document.getElementById('tutorial-btn');
+  tutorialBtn.addEventListener('click', startTutorialGame);
   nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startGame(); });
   nameInput.focus();
 });

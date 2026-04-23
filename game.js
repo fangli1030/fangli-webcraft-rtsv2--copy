@@ -719,8 +719,6 @@ class GameRenderer {
           this.canvas.style.cursor = 'pointer';
         } else if (this.placementMode) {
           this.canvas.style.cursor = 'cell';
-        } else if (pd && pd.expanding && pd.attackTarget !== null) {
-          this.canvas.style.cursor = 'crosshair';
         } else {
           this.canvas.style.cursor = 'default';
         }
@@ -829,12 +827,25 @@ class GameRenderer {
     for (const boat of (this.boats || [])) {
       const path = boat.path; if (!path || path.length < 2) continue;
       const pColor = PLAYER_COLORS[boat.owner] || '#fff';
-      ctx.strokeStyle = pColor + '66'; ctx.lineWidth = Math.max(0.5, 1 / this.zoom);
-      ctx.setLineDash([Math.max(1, 3 / this.zoom), Math.max(1, 3 / this.zoom)]);
-      ctx.beginPath();
-      for (let j = 0; j < path.length; j++) { const px = path[j] % GRID_W, py = (path[j] / GRID_W) | 0; j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); }
-      ctx.stroke(); ctx.setLineDash([]);
       const ci = Math.min(boat.pathIdx, path.length - 1);
+
+      // Wake trail — solid line behind the boat, dashed line ahead
+      if (ci > 0) {
+        ctx.strokeStyle = pColor + '55'; ctx.lineWidth = Math.max(1, 2 / this.zoom);
+        ctx.beginPath();
+        for (let j = 0; j <= ci; j++) { const px = path[j] % GRID_W, py = (path[j] / GRID_W) | 0; j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); }
+        ctx.stroke();
+      }
+      // Dashed path ahead
+      if (ci < path.length - 1) {
+        ctx.strokeStyle = pColor + '33'; ctx.lineWidth = Math.max(0.5, 1 / this.zoom);
+        ctx.setLineDash([Math.max(1, 3 / this.zoom), Math.max(1, 3 / this.zoom)]);
+        ctx.beginPath();
+        for (let j = ci; j < path.length; j++) { const px = path[j] % GRID_W, py = (path[j] / GRID_W) | 0; j === ci ? ctx.moveTo(px, py) : ctx.lineTo(px, py); }
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+
+      // Boat sprite
       const bx = path[ci] % GRID_W, by = (path[ci] / GRID_W) | 0;
       const bs = Math.max(2, 3 / Math.max(1, this.zoom * 0.3));
       let angle = 0;
@@ -1097,7 +1108,64 @@ class GameRenderer {
     const boxX = (this.canvas.width - boxW) / 2;
     const boxY = 60;
 
-    // Draw text box background
+    // Calculate highlight rect first (before drawing anything)
+    let highlightRect = null;
+    if (step.highlight) {
+      if (step.highlight === 'border' || step.highlight === 'enemy_border') {
+        // Compute from player centroids
+        const pd = this.playerData[0];
+        if (pd && pd.centroid) {
+          const screenX = (pd.centroid.x - this.camX) * this.zoom;
+          const screenY = (pd.centroid.y - this.camY) * this.zoom;
+          const size = Math.max(100, 200 / this.zoom);
+          highlightRect = { x: screenX - size/2, y: screenY - size/2, w: size, h: size };
+        }
+      } else if (step.highlight === 'slider') {
+        const bar = this._getBottomBarLayout();
+        highlightRect = { x: bar.x + 10, y: bar.y + 38, w: bar.w - 20, h: 14 };
+      } else if (step.highlight === 'build_btn_city') {
+        const bar = this._getBottomBarLayout();
+        const btnW = (bar.w - 20) / BUILD_ITEMS.length;
+        // City is first button (index 0)
+        highlightRect = { x: bar.x + 10, y: bar.y + 58, w: btnW - 4, h: 42 };
+      } else if (step.highlight === 'build_btn_dpost') {
+        const bar = this._getBottomBarLayout();
+        const btnW = (bar.w - 20) / BUILD_ITEMS.length;
+        // Defense post is second button (index 1)
+        highlightRect = { x: bar.x + 10 + btnW, y: bar.y + 58, w: btnW - 4, h: 42 };
+      }
+    }
+
+    // Draw dimming overlay (excluding highlight rect and tutorial box)
+    if (highlightRect) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      // Top
+      ctx.fillRect(0, 0, this.canvas.width, Math.min(highlightRect.y, boxY));
+      // Between highlight and tutorial box (if they don't overlap vertically)
+      if (highlightRect.y + highlightRect.h < boxY) {
+        ctx.fillRect(0, highlightRect.y + highlightRect.h, this.canvas.width, boxY - (highlightRect.y + highlightRect.h));
+      }
+      // Bottom (below both highlight and tutorial box)
+      const bottomStart = Math.max(highlightRect.y + highlightRect.h, boxY + boxH);
+      ctx.fillRect(0, bottomStart, this.canvas.width, this.canvas.height - bottomStart);
+      // Left of highlight (between top of highlight and bottom of tutorial box)
+      const leftRectTop = Math.max(highlightRect.y, boxY + boxH);
+      const leftRectBottom = Math.min(highlightRect.y + highlightRect.h, this.canvas.height);
+      if (leftRectBottom > leftRectTop) {
+        ctx.fillRect(0, leftRectTop, highlightRect.x, leftRectBottom - leftRectTop);
+      }
+      // Right of highlight (between top of highlight and bottom of tutorial box)
+      if (leftRectBottom > leftRectTop) {
+        ctx.fillRect(highlightRect.x + highlightRect.w, leftRectTop, this.canvas.width - (highlightRect.x + highlightRect.w), leftRectBottom - leftRectTop);
+      }
+      // Area between tutorial box and highlight (if highlight is below box, spanning full width except highlight)
+      if (highlightRect.y > boxY + boxH) {
+        ctx.fillRect(0, boxY + boxH, highlightRect.x, highlightRect.y - (boxY + boxH));
+        ctx.fillRect(highlightRect.x + highlightRect.w, boxY + boxH, this.canvas.width - (highlightRect.x + highlightRect.w), highlightRect.y - (boxY + boxH));
+      }
+    }
+
+    // Draw text box background (always on top, not dimmed)
     ctx.fillStyle = 'rgba(22, 27, 34, 0.95)';
     ctx.strokeStyle = '#ffd700';
     ctx.lineWidth = 2;
@@ -1107,11 +1175,11 @@ class GameRenderer {
     ctx.stroke();
 
     // Step counter
-    ctx.fillStyle = '#888';
-    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
-    ctx.fillText(`${this._tutorialStep + 1}/${this._tutorialSteps.length}`, boxX + boxW - 12, boxY + 8);
+    ctx.fillText(`${this._tutorialStep + 1}/${this._tutorialSteps.length}`, boxX + boxW - 12, boxY + 10);
 
     // Title
     ctx.fillStyle = '#ffd700';
@@ -1140,55 +1208,18 @@ class GameRenderer {
     }
     ctx.fillText(line, boxX + 12, y);
 
-    // Highlight region if specified
-    if (step.highlight) {
-      let highlightRect = null;
+    // Draw highlight border and arrow (on top of everything)
+    if (highlightRect) {
+      // Pulsing gold border
+      const pulse = Math.sin(performance.now() / 500) * 0.3 + 0.7;
+      ctx.strokeStyle = `rgba(255, 215, 0, ${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.rect(highlightRect.x, highlightRect.y, highlightRect.w, highlightRect.h);
+      ctx.stroke();
 
-      if (step.highlight === 'border' || step.highlight === 'enemy_border') {
-        // Compute from player centroids
-        const pd = this.playerData[0];
-        if (pd && pd.centroid) {
-          const screenX = (pd.centroid.x - this.camX) * this.zoom;
-          const screenY = (pd.centroid.y - this.camY) * this.zoom;
-          const size = Math.max(100, 200 / this.zoom);
-          highlightRect = { x: screenX - size/2, y: screenY - size/2, w: size, h: size };
-        }
-      } else if (step.highlight === 'slider') {
-        const bar = this._getBottomBarLayout();
-        highlightRect = { x: bar.x + bar.w * 0.05, y: bar.y + bar.h * 0.55, w: bar.w * 0.9, h: 20 };
-      } else if (step.highlight === 'build_btn_city') {
-        const bar = this._getBottomBarLayout();
-        const btnW = (bar.w - 20) / 4;
-        highlightRect = { x: bar.x + 10, y: bar.y + bar.h * 0.7, w: btnW, h: 40 };
-      } else if (step.highlight === 'build_btn_dpost') {
-        const bar = this._getBottomBarLayout();
-        const btnW = (bar.w - 20) / 4;
-        highlightRect = { x: bar.x + 10 + btnW + 5, y: bar.y + bar.h * 0.7, w: btnW, h: 40 };
-      }
-
-      if (highlightRect) {
-        // Dim everything except highlight region (draw 4 dark rects)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        // Top
-        ctx.fillRect(0, 0, this.canvas.width, highlightRect.y);
-        // Bottom
-        ctx.fillRect(0, highlightRect.y + highlightRect.h, this.canvas.width, this.canvas.height - (highlightRect.y + highlightRect.h));
-        // Left
-        ctx.fillRect(0, highlightRect.y, highlightRect.x, highlightRect.h);
-        // Right
-        ctx.fillRect(highlightRect.x + highlightRect.w, highlightRect.y, this.canvas.width - (highlightRect.x + highlightRect.w), highlightRect.h);
-
-        // Pulsing gold border
-        const pulse = Math.sin(performance.now() / 500) * 0.3 + 0.7;
-        ctx.strokeStyle = `rgba(255, 215, 0, ${pulse})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.rect(highlightRect.x, highlightRect.y, highlightRect.w, highlightRect.h);
-        ctx.stroke();
-
-        // Arrow from text box to highlight
-        this._drawArrow(ctx, boxX + boxW / 2, boxY + boxH, highlightRect.x + highlightRect.w / 2, highlightRect.y);
-      }
+      // Arrow from text box to highlight
+      this._drawArrow(ctx, boxX + boxW / 2, boxY + boxH, highlightRect.x + highlightRect.w / 2, highlightRect.y);
     }
   }
 

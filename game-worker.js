@@ -498,7 +498,16 @@ function findNearestOwnedShore(owner, targetX, targetY) {
   if (destShore < 0) return -1;
   const dsx = destShore % GRID_W, dsy = (destShore / GRID_W) | 0;
 
-  let bestIdx = -1, bestDist = Infinity;
+  // Collect all destination-adjacent water tiles for connectivity check
+  const destWater = new Set();
+  for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    const nx = dsx + dx, ny = dsy + dy;
+    if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && terrain[ny * GRID_W + nx] === 0)
+      destWater.add(ny * GRID_W + nx);
+  }
+
+  // Find all shore tiles owned by this player, sorted by distance
+  const candidates = [];
   for (const idx of playerStates[owner].borderTiles) {
     const x = idx % GRID_W, y = (idx / GRID_W) | 0;
     let isShore = false;
@@ -510,9 +519,40 @@ function findNearestOwnedShore(owner, targetX, targetY) {
     }
     if (!isShore) continue;
     const dist = Math.abs(x - dsx) + Math.abs(y - dsy);
-    if (dist < bestDist) { bestDist = dist; bestIdx = idx; }
+    candidates.push({ idx, dist });
   }
-  return bestIdx;
+  candidates.sort((a, b) => a.dist - b.dist);
+
+  // Pick closest candidate that has water-connected path to destination
+  for (const cand of candidates.slice(0, 10)) {
+    const sx = cand.idx % GRID_W, sy = (cand.idx / GRID_W) | 0;
+    const srcWater = [];
+    for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nx = sx + dx, ny = sy + dy;
+      if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && terrain[ny * GRID_W + nx] === 0)
+        srcWater.push(ny * GRID_W + nx);
+    }
+    if (srcWater.length === 0) continue;
+    // Quick BFS flood from source water to see if we can reach dest water
+    const visited = new Set(srcWater);
+    const queue = [...srcWater];
+    let head = 0, found = false;
+    while (head < queue.length && head < 20000) {
+      const curr = queue[head++];
+      if (destWater.has(curr)) { found = true; break; }
+      const cx = curr % GRID_W, cy = (curr / GRID_W) | 0;
+      for (const [ox, oy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nx = cx + ox, ny = cy + oy;
+        if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+        const ni = ny * GRID_W + nx;
+        if (visited.has(ni) || terrain[ni] !== 0) continue;
+        visited.add(ni);
+        queue.push(ni);
+      }
+    }
+    if (found) return cand.idx;
+  }
+  return -1;
 }
 
 function findNearestLandShore(targetIdx) {
@@ -632,7 +672,7 @@ function processBoats() {
     const boat = boats[i];
     if (!playerStates[boat.owner].alive) { boats.splice(i, 1); continue; }
 
-    boat.pathIdx += 2;
+    boat.pathIdx += 1;
     if (boat.pathIdx >= boat.path.length - 1) {
       const destIdx = boat.path[boat.path.length - 1];
       if (terrain[destIdx] > 0) {
@@ -644,7 +684,12 @@ function processBoats() {
           }
           conquer(boat.owner, destIdx);
         }
-        playerStates[boat.owner].troops += boat.troops;
+        // Spawn a beachhead attack from the landing tile
+        const ps = playerStates[boat.owner];
+        const target = destOwner >= 0 && destOwner !== boat.owner ? destOwner : -1;
+        ps.attackTroops += boat.troops;
+        ps.attackTarget = target;
+        ps.expanding = true;
       }
       boats.splice(i, 1);
     }

@@ -1,0 +1,96 @@
+{
+  "width": 1520,
+  "height": 960,
+  "num_land_tiles": 824330,
+  "nations": [
+    {
+      "coordinates": [
+        289,
+        545
+      ],
+      "name": "London",
+      "flag": "gb"
+    },
+    {
+      "coordinates": [
+        647,
+        782
+      ],
+      "name": "Roman Empire",
+      "flag": "it"
+    },
+    {
+      "coordinates": [
+        1082,
+        789
+      ],
+      "name": "Byzantine",
+      "flag": "gr"
+    },
+    {
+      "coordinates": [
+        366,
+        595
+      ],
+      "name": "Frankish",
+      "flag": "fr"
+    },
+    {
+      "coordinates": [
+        606,
+        294
+      ],
+      "name": "Viking",
+      "flag": "no"
+    },
+    {
+      "coordinates": [
+        221,
+        815
+      ],
+      "name": "Castile",
+      "flag": "es"
+    },
+    {
+      "coordinates": [
+        756,
+        607
+      ],
+      "name": "Habsburg",
+      "flag": "at"
+    },
+    {
+      "coordinates": [
+        677,
+        492
+      ],
+      "name": "Prussian",
+      "flag": "de"
+    },
+    {
+      "coordinates": [
+        1133,
+        548
+      ],
+      "name": "Kievan Rus",
+      "flag": "ua"
+    },
+    {
+      "coordinates": [
+        1195,
+        830
+      ],
+      "name": "Ottoman",
+      "flag": "tr"
+    },
+    {
+      "coordinates": [
+        879,
+        500
+      ],
+      "name": "Polish",
+      "flag": "pl"
+    }
+  ],
+  "name": "Europe"
+}

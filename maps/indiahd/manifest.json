@@ -1,0 +1,96 @@
+{
+  "width": 1440,
+  "height": 1800,
+  "num_land_tiles": 1667216,
+  "nations": [
+    {
+      "coordinates": [
+        313,
+        1041
+      ],
+      "name": "Mumbai",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        967,
+        663
+      ],
+      "name": "Maurya",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        647,
+        1523
+      ],
+      "name": "Chola",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        544,
+        488
+      ],
+      "name": "Mughal",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        366,
+        1074
+      ],
+      "name": "Maratha",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        468,
+        803
+      ],
+      "name": "Gupta",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        407,
+        704
+      ],
+      "name": "Rajput",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        504,
+        1259
+      ],
+      "name": "Vijayanagara",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        677,
+        1404
+      ],
+      "name": "Pallava",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        419,
+        313
+      ],
+      "name": "Sikh Empire",
+      "flag": "in"
+    },
+    {
+      "coordinates": [
+        593,
+        1573
+      ],
+      "name": "Pandya",
+      "flag": "in"
+    }
+  ],
+  "name": "IndiaHD"
+}

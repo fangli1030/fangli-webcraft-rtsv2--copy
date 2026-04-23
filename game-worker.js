@@ -183,9 +183,77 @@ function processExpansions() {
   }
 }
 
+function processBeachheads() {
+  const BEACHHEAD_RANGE = 40;
+  for (let i = 0; i < playerStates.length; i++) {
+    const ps = playerStates[i];
+    if (!ps.alive) continue;
+    for (let b = ps.beachheads.length - 1; b >= 0; b--) {
+      const bh = ps.beachheads[b];
+      if (bh.troops < 1) { ps.beachheads.splice(b, 1); continue; }
+
+      if (bh.target >= 0 && bh.target < playerStates.length && !playerStates[bh.target].alive) {
+        ps.troops += bh.troops;
+        ps.beachheads.splice(b, 1);
+        continue;
+      }
+
+      const lx = bh.landingIdx % GRID_W, ly = (bh.landingIdx / GRID_W) | 0;
+      const activeFront = new Set();
+      for (const idx of ps.borderTiles) {
+        const x = idx % GRID_W, y = (idx / GRID_W) | 0;
+        if (Math.abs(x - lx) + Math.abs(y - ly) > BEACHHEAD_RANGE) continue;
+        for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+          const ni = ny * GRID_W + nx;
+          if (grid[ni] === bh.target && terrain[ni] > 0) { activeFront.add(idx); break; }
+        }
+      }
+
+      if (activeFront.size === 0) {
+        ps.troops += bh.troops;
+        ps.beachheads.splice(b, 1);
+        continue;
+      }
+
+      let captured = 0;
+      const budget = Math.max(3, Math.floor(CELLS_PER_TICK / 2));
+      for (const fIdx of activeFront) {
+        if (captured >= budget || bh.troops < 1) break;
+        const fx = fIdx % GRID_W, fy = (fIdx / GRID_W) | 0;
+        const r = (Math.random() * 4) | 0;
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (let d = 0; d < 4; d++) {
+          const [dx, dy] = dirs[(r + d) & 3];
+          const nx = fx + dx, ny = fy + dy;
+          if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+          const nIdx = ny * GRID_W + nx;
+          if (grid[nIdx] !== bh.target || terrain[nIdx] === 0) continue;
+          const ter = terrain[nIdx];
+          let cost;
+          if (bh.target === -1) {
+            cost = isSpectateMode ? WILD_COST[ter] * 0.1 : WILD_COST[ter];
+          } else {
+            const defPs = playerStates[bh.target];
+            const ratio = Math.min(2, Math.max(0.6, defPs.troops / Math.max(1, ps.troops + bh.troops)));
+            cost = ENEMY_BASE_COST[ter] * ratio;
+            if (isTileDefended(nIdx, bh.target)) cost *= DPOST_DEFENSE_MULT;
+            if (defPs.cellCount > 0) defPs.troops = Math.max(0, defPs.troops - defPs.troops / defPs.cellCount);
+          }
+          if (bh.troops >= cost) { bh.troops -= cost; conquer(i, nIdx); captured++; }
+          break;
+        }
+      }
+      if (bh.troops < 1) ps.beachheads.splice(b, 1);
+    }
+  }
+}
+
 function generateTroops(dt) {
   const ticks = dt / 100;
-  const econGold = getEconGoldPerTick();
+  const econ = getEconGoldPerTick();
+  lastEconBreakdown = econ;
   for (let i = 0; i < playerStates.length; i++) {
     const ps = playerStates[i];
     if (!ps.alive || ps.cellCount === 0) continue;
@@ -196,7 +264,7 @@ function generateTroops(dt) {
     if (ps.isBot && !isSpectateMode) toAdd *= 0.8;
     if (isSpectateMode) toAdd *= 3;
     ps.troops = Math.min(ps.troops + toAdd, max);
-    let goldRate = (0.02 + ps.cellCount * 0.0001) + econGold[i];
+    let goldRate = (0.02 + ps.cellCount * 0.0001) + econ.total[i];
     if (isSpectateMode) goldRate *= 5;
     ps.gold += goldRate * ticks;
   }
@@ -393,14 +461,19 @@ function getEconGoldPerTick() {
     }
   }
 
-  // Sum per owner
+  // Sum per owner, tracking farm vs mine separately
   const goldPerOwner = new Float64Array(playerStates.length);
+  const farmGoldPerOwner = new Float64Array(playerStates.length);
+  const mineGoldPerOwner = new Float64Array(playerStates.length);
   for (const b of econBuildings) {
     if (b.type === 'farm' || b.type === 'mine') {
-      goldPerOwner[b.owner] += buildingOutputs.get(b.id) || b.output;
+      const val = buildingOutputs.get(b.id) || b.output;
+      goldPerOwner[b.owner] += val;
+      if (b.type === 'farm') farmGoldPerOwner[b.owner] += val;
+      else mineGoldPerOwner[b.owner] += val;
     }
   }
-  return goldPerOwner;
+  return { total: goldPerOwner, farms: farmGoldPerOwner, mines: mineGoldPerOwner };
 }
 
 function queryBuildingPreview(type, idx) {
@@ -492,67 +565,90 @@ function queryBuildingInspect(buildingIdx) {
 
 // --- Boats ---
 
-function findNearestOwnedShore(owner, targetX, targetY) {
-  const targetIdx = targetY * GRID_W + targetX;
-  const destShore = findNearestLandShore(targetIdx);
-  if (destShore < 0) return -1;
-  const dsx = destShore % GRID_W, dsy = (destShore / GRID_W) | 0;
-
-  // Collect all destination-adjacent water tiles for connectivity check
-  const destWater = new Set();
-  for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-    const nx = dsx + dx, ny = dsy + dy;
-    if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && terrain[ny * GRID_W + nx] === 0)
-      destWater.add(ny * GRID_W + nx);
-  }
-
-  // Find all shore tiles owned by this player, sorted by distance
-  const candidates = [];
+function findBoatEndpoints(owner, targetGx, targetGy) {
+  const targetIdx = targetGy * GRID_W + targetGx;
+  
+  // Step 1: Find all player-owned shore tiles
+  const ownerShores = [];
   for (const idx of playerStates[owner].borderTiles) {
     const x = idx % GRID_W, y = (idx / GRID_W) | 0;
-    let isShore = false;
     for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
       const nx = x + dx, ny = y + dy;
       if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && terrain[ny * GRID_W + nx] === 0) {
-        isShore = true; break;
+        ownerShores.push(idx);
+        break;
       }
     }
-    if (!isShore) continue;
-    const dist = Math.abs(x - dsx) + Math.abs(y - dsy);
-    candidates.push({ idx, dist });
   }
-  candidates.sort((a, b) => a.dist - b.dist);
+  if (ownerShores.length === 0) return null;
 
-  // Pick closest candidate that has water-connected path to destination
-  for (const cand of candidates.slice(0, 10)) {
-    const sx = cand.idx % GRID_W, sy = (cand.idx / GRID_W) | 0;
-    const srcWater = [];
+  // Step 2: Multi-source water BFS from all player shore tiles
+  // For each water tile, track distance and which shore tile seeded it
+  const waterDist = new Map();  // waterIdx -> distance
+  const waterSrc = new Map();   // waterIdx -> source shore idx
+  const queue = [];
+  for (const shoreIdx of ownerShores) {
+    const sx = shoreIdx % GRID_W, sy = (shoreIdx / GRID_W) | 0;
     for (const [dx, dy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
       const nx = sx + dx, ny = sy + dy;
-      if (nx >= 0 && nx < GRID_W && ny >= 0 && ny < GRID_H && terrain[ny * GRID_W + nx] === 0)
-        srcWater.push(ny * GRID_W + nx);
+      if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+      const ni = ny * GRID_W + nx;
+      if (terrain[ni] !== 0 || waterDist.has(ni)) continue;
+      waterDist.set(ni, 0);
+      waterSrc.set(ni, shoreIdx);
+      queue.push(ni);
     }
-    if (srcWater.length === 0) continue;
-    // Quick BFS flood from source water to see if we can reach dest water
-    const visited = new Set(srcWater);
-    const queue = [...srcWater];
-    let head = 0, found = false;
-    while (head < queue.length && head < 20000) {
-      const curr = queue[head++];
-      if (destWater.has(curr)) { found = true; break; }
-      const cx = curr % GRID_W, cy = (curr / GRID_W) | 0;
-      for (const [ox, oy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-        const nx = cx + ox, ny = cy + oy;
-        if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
-        const ni = ny * GRID_W + nx;
-        if (visited.has(ni) || terrain[ni] !== 0) continue;
-        visited.add(ni);
-        queue.push(ni);
-      }
-    }
-    if (found) return cand.idx;
   }
-  return -1;
+  let head = 0;
+  while (head < queue.length && head < 80000) {
+    const curr = queue[head++];
+    const d = waterDist.get(curr);
+    const src = waterSrc.get(curr);
+    const cx = curr % GRID_W, cy = (curr / GRID_W) | 0;
+    for (const [ox, oy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nx = cx + ox, ny = cy + oy;
+      if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+      const ni = ny * GRID_W + nx;
+      if (waterDist.has(ni) || terrain[ni] !== 0) continue;
+      waterDist.set(ni, d + 1);
+      waterSrc.set(ni, src);
+      queue.push(ni);
+    }
+  }
+
+  // Step 3: Find the best destination shore near the target
+  // BFS through land from clicked tile to find shore tiles, pick the one
+  // with the shortest water distance back to the player
+  const visited = new Set([targetIdx]);
+  const landQueue = [targetIdx];
+  let lhead = 0;
+  let bestDest = -1, bestSrc = -1, bestDist = Infinity;
+  while (lhead < landQueue.length && lhead < 5000) {
+    const curr = landQueue[lhead++];
+    const cx = curr % GRID_W, cy = (curr / GRID_W) | 0;
+    for (const [ddx, ddy] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      const nx = cx + ddx, ny = cy + ddy;
+      if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+      const ni = ny * GRID_W + nx;
+      if (visited.has(ni)) continue;
+      visited.add(ni);
+      if (terrain[ni] === 0) {
+        // This is water adjacent to curr — check if curr is a reachable dest shore
+        const wd = waterDist.get(ni);
+        if (wd !== undefined && wd < bestDist) {
+          bestDist = wd;
+          bestDest = curr;  // the land tile adjacent to this water
+          bestSrc = waterSrc.get(ni);  // the player shore that seeded this
+        }
+        continue;  // don't enqueue water tiles
+      }
+      landQueue.push(ni);
+    }
+  }
+
+  if (bestDest < 0 || bestSrc < 0) return null;
+  if (bestDest === bestSrc) return null;  // same landmass
+  return { srcShore: bestSrc, destShore: bestDest };
 }
 
 function findNearestLandShore(targetIdx) {
@@ -641,30 +737,19 @@ function findWaterPath(srcIdx, dstIdx) {
 function launchBoat(owner, targetGx, targetGy) {
   const ps = playerStates[owner];
   if (!ps.alive || ps.troops < 5) return null;
-  const ownerBoats = boats.filter(b => b.owner === owner);
-  if (ownerBoats.length >= MAX_BOATS) return null;
+  if (boats.filter(b => b.owner === owner).length >= MAX_BOATS) return null;
+  if (terrain[targetGy * GRID_W + targetGx] === 0) return null;
 
-  const targetIdx = targetGy * GRID_W + targetGx;
-  if (terrain[targetIdx] === 0) return null;
+  const endpoints = findBoatEndpoints(owner, targetGx, targetGy);
+  if (!endpoints) return null;
 
-  const destShore = findNearestLandShore(targetIdx);
-  if (destShore < 0) return null;
-
-  const shoreIdx = findNearestOwnedShore(owner, targetGx, targetGy);
-  if (shoreIdx < 0) return null;
-
-  // Don't launch if source and dest are on the same landmass (no water crossing needed)
-  if (shoreIdx === destShore) return null;
-
-  const path = findWaterPath(shoreIdx, destShore);
+  const path = findWaterPath(endpoints.srcShore, endpoints.destShore);
   if (!path || path.length < 3) return null;
 
   const send = Math.max(1, Math.floor(ps.troops * BOAT_TROOP_FRACTION));
   ps.troops -= send;
-
-  const boat = { owner, troops: send, path, pathIdx: 0, targetIdx: destShore };
-  boats.push(boat);
-  return boat;
+  boats.push({ owner, troops: send, path, pathIdx: 0, targetIdx: endpoints.destShore });
+  return true;
 }
 
 function processBoats() {
@@ -687,9 +772,7 @@ function processBoats() {
         // Spawn a beachhead attack from the landing tile
         const ps = playerStates[boat.owner];
         const target = destOwner >= 0 && destOwner !== boat.owner ? destOwner : -1;
-        ps.attackTroops += boat.troops;
-        ps.attackTarget = target;
-        ps.expanding = true;
+        ps.beachheads.push({ landingIdx: destIdx, troops: boat.troops, target: target });
       }
       boats.splice(i, 1);
     }
@@ -814,6 +897,7 @@ function botThinkSingle(id, borders, now) {
 }
 
 let lastTime = 0, expansionTimer = 0, gameOver = false;
+let lastEconBreakdown = null;
 
 function tick() {
   if (gameOver) return;
@@ -822,10 +906,10 @@ function tick() {
   lastTime = now;
   generateTroops(dt);
   if (isSpectateMode) {
-    processExpansions(); processBoats();
+    processExpansions(); processBeachheads(); processBoats();
   } else {
     expansionTimer += dt;
-    if (expansionTimer >= EXPANSION_TICK_MS) { expansionTimer = 0; processExpansions(); processBoats(); }
+    if (expansionTimer >= EXPANSION_TICK_MS) { expansionTimer = 0; processExpansions(); processBeachheads(); processBoats(); }
   }
   botThinkAll();
   const elim = checkElimination();
@@ -836,6 +920,7 @@ function tick() {
     expanding: ps.expanding, attackTarget: ps.attackTarget, gold: ps.gold, cityCount: ps.cityCount, dpostCount: ps.dpostCount,
     cx: centersN[i] > 0 ? centersSumX[i] / centersN[i] : 0,
     cy: centersN[i] > 0 ? centersSumY[i] / centersN[i] : 0, cn: centersN[i],
+    beachheads: ps.beachheads.map(bh => ({ landingIdx: bh.landingIdx, troops: bh.troops, target: bh.target })),
   }));
   const cityData = cities.map(c => ({ idx: c.idx, owner: c.owner }));
   const dpostData = defensePosts.map(d => ({ idx: d.idx, owner: d.owner }));
@@ -845,7 +930,14 @@ function tick() {
   destroyedDposts = [];
   const ch = new Int32Array(tileChanges);
   tileChanges = [];
-  self.postMessage({ type: 'tick', changes: ch.buffer, changesLen: ch.length, players: playerData, cities: cityData, defensePosts: dpostData, econBuildings: econData, boats: boatData, destroyedDposts: destroyedData, gameOver: elim.gameOver, winner: elim.winner }, [ch.buffer]);
+  const ps0 = playerStates[0];
+  const landGold = ps0 && ps0.alive ? (0.02 + ps0.cellCount * 0.0001) : 0;
+  const goldBreakdown = lastEconBreakdown ? {
+    land: isSpectateMode ? landGold * 5 : landGold,
+    farms: isSpectateMode ? (lastEconBreakdown.farms[0] || 0) * 5 : (lastEconBreakdown.farms[0] || 0),
+    mines: isSpectateMode ? (lastEconBreakdown.mines[0] || 0) * 5 : (lastEconBreakdown.mines[0] || 0),
+  } : { land: 0, farms: 0, mines: 0 };
+  self.postMessage({ type: 'tick', changes: ch.buffer, changesLen: ch.length, players: playerData, cities: cityData, defensePosts: dpostData, econBuildings: econData, boats: boatData, destroyedDposts: destroyedData, goldBreakdown, gameOver: elim.gameOver, winner: elim.winner }, [ch.buffer]);
 }
 
 self.onmessage = function(e) {
@@ -866,7 +958,7 @@ self.onmessage = function(e) {
       playerStates.push({
         troops: spectate ? msg.startingTroops * 10 : (i === 0 ? msg.startingTroops : msg.startingTroops * 0.5),
         cellCount: 0, alive: spectate ? i > 0 : true, expanding: false, attackTarget: null,
-        borderTiles: new Set(), attackTroops: 0, gold: spectate ? 200 : (i === 0 ? 300 : 0), cityCount: 0, dpostCount: 0,
+        borderTiles: new Set(), attackTroops: 0, gold: spectate ? 200 : (i === 0 ? 300 : 0), cityCount: 0, dpostCount: 0, beachheads: [],
         isBot: spectate || i > 0,
         reserveRatio: spectate ? 0.02 + Math.random() * 0.03 : 0.3 + Math.random() * 0.1,
         triggerRatio: spectate ? 0.05 + Math.random() * 0.05 : 0.5 + Math.random() * 0.1,

@@ -74,7 +74,10 @@ class GameRenderer {
     this._helpOpen = false;
     this._lastTroops = 0; this._troopRate = 0; this._troopRateTimer = 0;
     this._lastGold = 0; this._goldRate = 0;
+    this._goldBreakdown = { land: 0, farms: 0, mines: 0 };
+    this._hoverGoldPill = false;
     this._contextMenu = null;
+    this._uiPositions = {};
     this._tutorialActive = false;
     this._tutorialStep = 0;
     this._tutorialSteps = [
@@ -259,6 +262,7 @@ class GameRenderer {
         this.defensePosts = newDposts;
         this.econBuildings = msg.econBuildings || [];
         this.boats = msg.boats || [];
+        if (msg.goldBreakdown) this._goldBreakdown = msg.goldBreakdown;
         this.gameOver = msg.gameOver; this.winner = msg.winner;
         for (const dd of (msg.destroyedDposts || [])) {
           this.animations.push({ type: 'dpost_destroy', idx: dd.idx, owner: dd.owner, startTime: performance.now(), duration: 800 });
@@ -520,6 +524,7 @@ class GameRenderer {
     this.canvas.addEventListener('mousedown', (e) => {
       this._mouseDownX = e.clientX; this._mouseDownY = e.clientY;
       this._didDrag = false; this._camStartX = this.camX; this._camStartY = this.camY;
+      if (e.button === 2) return;  // Right-click handled by contextmenu listener
 
       if (this._contextMenu) { this._contextMenuClick = true; e.preventDefault(); return; }
 
@@ -583,6 +588,9 @@ class GameRenderer {
       const overHelp = (hcx - helpX) ** 2 + (hcy - helpY) ** 2 < 225;
       const overLeaderboard = hcx < 200 && hcy < 24;
       this._hoverUI = overBar || overHelp || overLeaderboard;
+
+      const gp = this._goldPillRect;
+      this._hoverGoldPill = gp && hcx >= gp.x && hcx <= gp.x + gp.w && hcy >= gp.y && hcy <= gp.y + gp.h;
 
       if (this.placementMode && ['farm','mine','mill','factory'].includes(this.placementMode)) {
         if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H)
@@ -856,6 +864,21 @@ class GameRenderer {
       if (this.zoom > 1) { ctx.fillStyle = '#fff'; ctx.font = `${Math.max(3, 6 / this.zoom)}px monospace`; ctx.textAlign = 'center'; ctx.fillText(formatTroops(boat.troops), bx, by - bs - 2); }
     }
 
+    // Beachhead indicators
+    const bhData = this.playerData[0];
+    if (bhData && bhData.beachheads) {
+      for (const bh of bhData.beachheads) {
+        const bx = bh.landingIdx % GRID_W, by = (bh.landingIdx / GRID_W) | 0;
+        const pulse = 0.7 + 0.3 * Math.sin(performance.now() / 300);
+        const r = Math.max(3, 5 / Math.max(1, this.zoom * 0.3)) * pulse;
+        ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.strokeStyle = PLAYER_COLORS[0]; ctx.lineWidth = Math.max(0.5, 1 / this.zoom);
+        ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = `${Math.max(3, 6 / this.zoom)}px monospace`;
+        ctx.textAlign = 'center'; ctx.fillText(formatTroops(bh.troops), bx, by - r - 2);
+      }
+    }
+
     // Placement previews (defense post, city, econ) — keep existing logic
     if (this.placementMode === 'defense_post' && this._hoverGx !== undefined) {
       const hx = this._hoverGx, hy = this._hoverGy, hIdx = hy * GRID_W + hx;
@@ -959,10 +982,13 @@ class GameRenderer {
     const goldRateStr = ` +${this._goldRate.toFixed(0)}/m`;
     const goldStr = `${Math.floor(gold)}g${goldRateStr}`;
     const goldW = ctx.measureText(goldStr).width + 20;
-    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.roundRect(bar.x + bar.w - 10 - goldW, row1Y, goldW, pillH, pillR); ctx.stroke();
+    const goldPillX = bar.x + bar.w - 10 - goldW;
+    this._goldPillRect = { x: goldPillX, y: row1Y, w: goldW, h: pillH };
+    ctx.strokeStyle = this._hoverGoldPill ? '#ffe866' : '#ffd700'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(goldPillX, row1Y, goldW, pillH, pillR); ctx.stroke();
+    if (this._hoverGoldPill) { ctx.fillStyle = 'rgba(255,215,0,0.08)'; ctx.fill(); }
     ctx.fillStyle = '#ffd700';
-    ctx.fillText(goldStr, bar.x + bar.w - 10 - goldW / 2, row1Y + pillH / 2);
+    ctx.fillText(goldStr, goldPillX + goldW / 2, row1Y + pillH / 2);
 
     // Troop bar (center)
     const tbX = bar.x + 10 + rateW + 10, tbW = bar.w - 20 - rateW - goldW - 20;
@@ -981,6 +1007,10 @@ class GameRenderer {
     ctx.beginPath(); ctx.roundRect(bar.x + 10, row2Y, (bar.w - 20) * this.attackRatio, 14, 4); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
     ctx.fillText(`⚔ Attack: ${Math.round(this.attackRatio * 100)}%`, bar.x + bar.w / 2, row2Y + 7);
+
+    // Cache slider position for tutorial
+    this._uiPositions.slider = { x: bar.x + 10, y: row2Y, w: bar.w - 20, h: 14 };
+    this._uiPositions.buildButtons = {};
 
     // Row 3: build buttons
     const row3Y = bar.y + 58;
@@ -1005,6 +1035,67 @@ class GameRenderer {
       ctx.fillStyle = '#ffd700'; ctx.font = '8px monospace';
       ctx.fillText(`${cost}g [${item.hotkey}]`, bx + btnW / 2, row3Y + 36);
       ctx.globalAlpha = 1;
+
+      // Cache button position for tutorial
+      this._uiPositions.buildButtons[item.key] = { x: bx + 2, y: row3Y, w: btnW - 4, h: btnH };
+    }
+
+    // --- Gold breakdown tooltip ---
+    if (this._hoverGoldPill && this._goldBreakdown) {
+      const gb = this._goldBreakdown;
+      const ticksPerMin = 600;
+      const landPerMin = gb.land * ticksPerMin;
+      const farmsPerMin = gb.farms * ticksPerMin;
+      const minesPerMin = gb.mines * ticksPerMin;
+      const totalPerMin = landPerMin + farmsPerMin + minesPerMin;
+
+      const lines = [
+        { label: 'Land', value: landPerMin, color: '#88cc88' },
+        { label: 'Farms', value: farmsPerMin, color: '#66aa44' },
+        { label: 'Mines', value: minesPerMin, color: '#aa7744' },
+      ];
+
+      ctx.font = 'bold 10px monospace';
+      const ttPad = 10, ttLineH = 16, ttHeaderH = 18, ttDivH = 8;
+      const ttH = ttHeaderH + lines.length * ttLineH + ttDivH + ttLineH + ttPad * 2;
+      let maxLabelW = 0;
+      for (const l of lines) maxLabelW = Math.max(maxLabelW, ctx.measureText(l.label + ':').width);
+      ctx.font = '10px monospace';
+      let maxValW = 0;
+      for (const l of lines) maxValW = Math.max(maxValW, ctx.measureText(`+${l.value.toFixed(1)}/m`).width);
+      maxValW = Math.max(maxValW, ctx.measureText(`+${totalPerMin.toFixed(1)}/m`).width);
+      const ttW = ttPad * 2 + maxLabelW + 12 + maxValW;
+
+      const gp = this._goldPillRect;
+      const ttX = gp.x + gp.w / 2 - ttW / 2;
+      const ttY = gp.y - ttH - 8;
+
+      ctx.fillStyle = 'rgba(31, 41, 55, 0.95)';
+      ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,215,0,0.3)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.stroke();
+
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 10px monospace';
+      ctx.fillText('Revenue', ttX + ttW / 2, ttY + ttPad);
+
+      let curY = ttY + ttPad + ttHeaderH;
+      for (const l of lines) {
+        ctx.textAlign = 'left'; ctx.fillStyle = l.color; ctx.font = '10px monospace';
+        ctx.fillText(l.label + ':', ttX + ttPad, curY);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#e6edf3';
+        ctx.fillText(`+${l.value.toFixed(1)}/m`, ttX + ttW - ttPad, curY);
+        curY += ttLineH;
+      }
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ttX + ttPad, curY + 2); ctx.lineTo(ttX + ttW - ttPad, curY + 2); ctx.stroke();
+      curY += ttDivH;
+
+      ctx.textAlign = 'left'; ctx.fillStyle = '#ffd700'; ctx.font = 'bold 10px monospace';
+      ctx.fillText('Total:', ttX + ttPad, curY);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#ffd700';
+      ctx.fillText(`+${totalPerMin.toFixed(1)}/m`, ttX + ttW - ttPad, curY);
     }
 
     // --- Leaderboard (top-left) ---
@@ -1102,6 +1193,9 @@ class GameRenderer {
     const ctx = this.ctx;
     const step = this._tutorialSteps[this._tutorialStep];
     if (!step) return;
+    
+    // Guard: UI positions may not be cached yet on first frame
+    if (step.highlight && !this._uiPositions.slider) return;
 
     // Text box dimensions and position
     const boxW = 420, boxH = 100;
@@ -1121,19 +1215,11 @@ class GameRenderer {
           highlightRect = { x: screenX - size/2, y: screenY - size/2, w: size, h: size };
         }
       } else if (step.highlight === 'slider') {
-        const bar = this._getBottomBarLayout();
-        highlightRect = { x: bar.x + 10, y: bar.y + 38, w: bar.w - 20, h: 14 };
+        highlightRect = this._uiPositions.slider;
       } else if (step.highlight === 'build_btn_city') {
-        const bar = this._getBottomBarLayout();
-        const btnW = (bar.w - 20) / BUILD_ITEMS.length;
-        // City is first button (index 0)
-        highlightRect = { x: bar.x + 10, y: bar.y + 58, w: btnW - 4, h: 42 };
+        highlightRect = this._uiPositions.buildButtons['city'];
       } else if (step.highlight === 'build_btn_dpost') {
-        const bar = this._getBottomBarLayout();
-        const btnW = (bar.w - 20) / BUILD_ITEMS.length;
-        // Defense post is second button (index 1)
-        highlightRect = { x: bar.x + 10 + btnW, y: bar.y + 58, w: btnW - 4, h: 42 };
-      }
+        highlightRect = this._uiPositions.buildButtons['defense_post'];
     }
 
     // Draw dimming overlay (excluding highlight rect and tutorial box)

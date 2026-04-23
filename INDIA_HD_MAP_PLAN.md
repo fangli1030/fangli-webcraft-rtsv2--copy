@@ -147,7 +147,7 @@ cp /Users/anujvarma/desktop/website/OpenFrontIO/resources/maps/indiahd/* \
 
 ### Step 6: Replace map loading in `game.js`
 
-**⚠️ COORDINATE WITH OTHER CLAUDE BEFORE TOUCHING `game.js`** — user mentioned another Claude is/was editing this file. Confirm with the user before this step.
+**⚠️ COORDINATE BEFORE TOUCHING `game.js`** — another session may be editing this file. Confirm with the user before this step.
 
 Required edits:
 1. **Delete** `INDIA_OUTLINE` constant (`game.js:30-73`) and `SRI_LANKA_OUTLINE` (`game.js:74-78`).
@@ -207,5 +207,5 @@ Add to a `CREDITS.md` or similar in the project:
 1. **Confirm the prebuilt `map-generator` binary accepts `--maps=indiahd` without source edit.** Try first; if it errors with "unknown map," fall back to editing `main.go` + `brew install go` + `go run .`.
 2. **Verify spawn pixel coords land on land tiles** (post-generation check). Adjust by ±5 px if any falls in water due to coastline rasterization noise.
 3. **`max_elev` tuning** in the PNG bake (suggested 4000m) — visualize the thumbnail and adjust if mountains look too washed out or lowlands look monotone.
-4. **Coordinate with user on `game.js` edits** if another Claude session is touching that file.
+4. **Coordinate with user on `game.js` edits** if another session is touching that file.
 5. **Decide on map orientation conventions** — manifest origin is top-left (y increases south). Confirm `game.js` rendering expects the same. Current `INDIA_OUTLINE` uses y-down too (Patna at y≈80, Kanyakumari at y≈700), so it should match.

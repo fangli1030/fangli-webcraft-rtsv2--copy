@@ -8,23 +8,20 @@ This game differentiates from OpenFront through a deeper economy that rewards st
 - Economy is complex enough that building tall is viable and interesting — but never so safe that turtling is optimal
 - Diplomacy and alliances matter because players need terrain they don't start with (coastal players need inland rubies, inland players need coastal ports)
 - Border clashes and conquest stay active because:
-  - Territory contains resources (grassland, rubies, fish patches) that are worth taking
-  - Trade routes through contested territory can be cut, forcing military response
-  - Siege towers give attackers a tool to break through defensive lines
+  - Territory contains resources (grassland, rubies) that are worth taking
+  - Missiles give attackers a tool to break through defensive lines and destroy infrastructure
   - Missiles punish players who over-invest in static defense and neglect adaptation
   - City exclusion zones mean the best city sites are finite and worth fighting over
-  - Destroying enemy infrastructure (mills, trade hubs, silos) via conquest or missiles has massive economic impact — wars have real stakes
+  - Destroying enemy infrastructure (farms, ports, silos) via conquest or missiles has massive economic impact — wars have real stakes
 
 **Anti-stalemate mechanics:**
-- Siege towers counter defense posts, preventing permanent turtle
-- Missiles bypass ground defenses entirely, punishing passivity
-- Trade route vulnerability means a single territorial cut can cripple an economy — incentivizes offensive action to sever enemy supply lines
+- Missiles bypass ground defenses entirely, punishing passivity and breaking stalemates
 - Resource scarcity (limited river-coast tiles, limited ruby deposits) ensures players compete over the same terrain rather than building in isolation
-- Each escalation step (defense post upgrades, siege tower upgrades, SAMs) costs more gold — eventually one side can't keep up and the front breaks
+- Each escalation step (defense post upgrades) costs more gold — eventually one side can't keep up and the front breaks
 
 **Compared to OpenFront:**
 - Slower early game — players build infrastructure before fighting
-- More meaningful mid game — border militarization, trade routes, and diplomacy create dynamic tension
+- More meaningful mid game — border militarization and diplomacy create dynamic tension
 - More dramatic late game — missile strikes and economic warfare create decisive moments
 - Alliances matter — inland and coastal players naturally complement each other and benefit from cooperation
 
@@ -34,121 +31,262 @@ A spatial economy where geographic decisions drive everything. Ports generate go
 
 ---
 
+## Win Condition
+
+- **Victory**: First player to control **80% of all land tiles** on the map wins
+- Gives a clear, visible target — players can track territory percentages on the leaderboard
+- Prevents infinite stalemates — even if two players are evenly matched, one will eventually cross 80%
+- The 80% threshold means you don't need to hunt down the last few tiles of a cornered player — once you're dominant, the game ends
+
+---
+
+## Diplomacy
+
+### Alliances
+- **How to create**: Right-click on a player's territory → click "Alliance" button → sends an alliance request to that player
+- **Acceptance**: The target player sees the request in their **diplomacy log** (bottom-right HUD) and can accept or decline
+- **Duration**: Alliances expire after a set time (e.g., 3-5 minutes). They are not permanent
+- **Expiration warning**: The diplomacy log notifies the player when an alliance is about to expire (e.g., 30 seconds before). The player must actively renew it by sending a new request — alliances don't auto-renew
+- **Effect**: Allied players cannot attack each other's territory. Troops on shared borders are passive. This frees up troops from those borders for use elsewhere
+- **Visible to all**: Active alliances are shown on the map (e.g., a colored link between allied players, or a shared border indicator). All players can see who is allied with whom — this is public information that shapes diplomacy
+- **Hover to inspect**: Hovering over a player's name (on the leaderboard or map label) shows a tooltip listing all of that player's current alliances and time remaining on each. Quick way to read the diplomatic landscape without opening any menus
+- **Breaking an alliance early**: TBD — could be allowed with a penalty (e.g., a temporary overextension-like debuff) or alliances could be unbreakable until expiration. Early breaking with a penalty is more interesting — it creates trust dynamics
+
+### Diplomacy Log (bottom-right HUD)
+- **Purpose**: A small panel that shows alliance-related notifications
+- **Shows**:
+  - Pending alliance requests (accept/decline buttons)
+  - Active alliances with time remaining
+  - Expiration warnings ("Alliance with [Player] expires in 30s")
+  - Alliance broken notifications
+- **Compact**: Should not take up much screen space — just a scrollable list of short notifications
+- **Design intent**: Keeps diplomacy visible and manageable without a complex diplomacy screen. Players can glance at it to see their alliance status and respond to requests without leaving the map view
+
+---
+
+## Bots & AI Nations
+
+The map is populated with two types of non-player entities that create a dynamic early game and ongoing mid/late-game challenge.
+
+### Bots (neutral/gray nations)
+- **Appearance**: Gray-colored territory scattered across the map, numerous small pockets
+- **Behavior**: Passive — they do not expand, attack, or build infrastructure. They simply hold territory
+- **Purpose**: Early-game fodder. Players expand by conquering bots in the opening minutes, claiming land and resources without fighting other players. This creates a land-grab phase where players race to secure the best terrain (grassland, ruby deposits, coastline) before borders meet
+- **Troop count**: Very low — easy to take with minimal troop investment
+- **Buildings**: None — bot territory is undeveloped land. Players must build their own infrastructure after conquering it
+- **Distribution**: Numerous and spread across the entire map, filling gaps between player and AI nation starting positions. Ensures there's always nearby territory to expand into at game start
+- **Design intent**: Prevents players from immediately fighting each other. The first 1-2 minutes are about expansion and scouting — reading the terrain, identifying valuable grassland/ruby/coastal zones, and racing to claim them
+
+### AI Nations (full NPC players)
+- **Appearance**: Colored territory like human players, with nation names
+- **Behavior**: Active — they expand into bot territory, build infrastructure (cities, farms, ports, mines, defense posts), form alliances, and wage war against players and other AI nations
+- **Purpose**: Mid/late-game challenge. AI nations develop economies, defend their borders, and compete for territory like human players. They prevent the map from becoming empty once bots are consumed
+- **Infrastructure**: AI nations build the full range of buildings — cities on rivers/coasts, farms on grassland, ports on coastline, mines on rubies. They follow the same economic rules as human players
+- **Diplomacy**: AI nations can accept/propose alliances. They make strategic decisions about who to ally with and who to attack based on territory, relative strength, and proximity
+- **Difficulty scaling**: AI nations should be noticeably harder to conquer than bots — they have real troop counts, defense posts on borders, and infrastructure generating pop and gold. Taking an AI nation's territory is a mid-game military campaign, not an early-game land grab
+- **Design intent**: Ensures the map stays competitive even with few human players. AI nations fill the strategic role of rival empires — they control valuable terrain, build infrastructure worth capturing, and create multi-front pressure that prevents any single player from expanding freely
+
+### Game Flow with Bots & AI Nations
+```
+EARLY GAME (0-2 min):    Players expand into gray bot territory, claiming land and resources
+                         AI nations also expand into bots — race for the best terrain
+MID GAME (2-5 min):      Bot territory is mostly consumed. Player and AI nation borders meet
+                         First conflicts begin. Infrastructure building ramps up
+LATE GAME (5+ min):      Full-scale warfare between developed players and AI nations
+                         Alliances, vector attacks, missiles
+```
+
+---
+
+## Core Mechanics
+
+### Starting Conditions
+- **No city, no gold**: Every player starts with nothing — just a spawn point on the map
+- **Player chooses spawn location**: Before the game starts, the player picks where to spawn (similar to OpenFront). This is the first strategic decision — choosing a river valley, coastal area, or highland position sets the tone for the entire game
+- **Early game flow**: Players immediately expand into nearby gray bot territory. Conquering bots yields their gold (similar to OpenFront), giving the player their first gold income to fund L1 buildings
+- **First city**: Players must earn enough gold from bot conquest and passive territory income to place their first city. This creates urgency to expand quickly in the opening minutes
+
+### Troop Generation
+- **Troop capacity**: Determined by territory size (passive) + city pop (from farms). More pop = higher troop cap
+- **Troop regeneration**: Troops regenerate automatically over time up to the troop capacity (same logic as OpenFront). The rate of regeneration scales with how far below capacity the player is — the more depleted, the faster troops regenerate (up to a point)
+- **No manual troop production**: Players don't build barracks or recruit troops. Troops just fill up based on capacity. The player's job is to increase capacity through pop infrastructure
+
+### Combat Math
+- **Tile cost**: Each tile costs troops to conquer. The base cost depends on terrain type:
+  - **Grassland**: Cheapest to take — open, flat terrain
+  - **Highland**: More expensive — rugged terrain, harder to fight through
+  - **Bot territory**: Very cheap — bots have minimal resistance
+  - **Enemy territory**: Base terrain cost + additional cost scaling with the defender's troop count. A defender at full troop capacity is much harder to push than one at 10% capacity
+- **Defense post modifier**: Tiles within a defense post's radius cost significantly more to take
+- **Beachhead modifier**: During the 5-second stabilization window, the defender gets an attack bonus making beachhead tiles cheaper to retake
+- **Overextension modifier**: The attacker's tile cost increases with their total territory size relative to developed infrastructure
+- **Formulas**: Specific values to be derived from OpenFront's existing combat math and tuned through playtesting
+
+### Building Placement Rules
+- **Where**: Any tile within the player's own territory (with building-specific restrictions — ports need coast, mines need rubies, etc.)
+- **When**: Anytime, including during active combat. No restriction on building while fighting
+- **Build time**: Most economic buildings (farms, ports, mines, cities) are placed instantly
+- **Military building delay**: Defense posts take time to build after placement (e.g., 5-10 seconds). The building appears as "under construction" and provides no benefit until complete. This prevents reactive instant-fortification during active combat — you can't drop a defense post the moment an enemy vector attack hits your border
+- **Build cooldown**: No global cooldown — players can place multiple buildings in quick succession as long as they have gold
+- **Building queuing**: Not needed — players place buildings one at a time by clicking
+
+### Map Generation
+- **Balanced resource distribution**: The map generator should ensure a roughly balanced distribution of terrain types and resources across the map. No region should have zero access to grassland, highland, or coastline within a reasonable expansion distance
+- **Spawn point selection**: Players choose their spawn location on the map before the game starts. The map should provide enough viable spawn locations that early spawners don't monopolize all premium terrain
+- **River placement**: Rivers should flow from highland/mountain areas toward the coast, creating natural valleys of rich grassland. River-coast intersections (deltas) should be limited and valuable
+- **Ruby distribution**: Ruby deposits should be scattered across highland terrain with some clustering. Not every highland area has rubies — players must scout to find the richest deposits
+- **Mountain placement**: Mountain ranges should create natural barriers and chokepoints that define the map's strategic geography. Not too many (map becomes fragmented) and not too few (no natural defenses)
+
+---
+
 ## Resource Chains
 
 ```
-POP CHAIN:    Grassland → Farms → Cities ← Fisheries ← Fish Patches
-                            ↑
-                          Mills (amplify farms)
+POP CHAIN:    Grassland → Farms → Cities
               River bonus multiplies farm yield and city pop
+              All pop buildings upgradeable (L1 cheap, L2 expensive + big multiplier)
 
-GOLD CHAIN:   Ports (coastline) → Base gold
+GOLD CHAIN:   Territory → Passive gold trickle (enough for L1 buildings)
+              Ports (coastline) → Base gold
               Ruby Deposits → Mines → Base gold (inland, safe)
-              Ruby Deposits → Mines → Transport Hubs → Ports → Boosted gold (trade route, vulnerable)
+              Gold ports/mines upgradeable (L2 = more gold output)
 
 MILITARY:     Pop → Troop capacity
-              Gold → Missile Silos → Missiles (per-launch cost) → Area damage
-              Gold → SAM Sites → Interceptors (per-intercept cost) → Missile defense
-
-              Gold funds all buildings + late-game arms race
-              Pop increases troop capacity
+              Gold → Building upgrades (L1→L2, ongoing gold sink)
+              Gold → Defense posts (border protection)
+              Gold → Missile Silos → Missiles (per-launch cost, escalating) → Area damage
 ```
 
 ---
 
 ## Buildings
 
+### Gold Income Sources
+- **Territory**: All players receive a small passive gold trickle from territory size. This is enough to fund L1 buildings slowly — even a player with no ports or mines can build basic infrastructure given enough time and land
+- **Ports**: Primary coastal gold source. Scales with coastline exposure
+- **Mines**: Primary inland gold source. Scales with ruby deposits
+
+### Building Upgrade Tiers
+All buildings (except defense posts, which have their own level system) can be upgraded from L1 to L2 (and potentially L3). Each level increases the building's output with a significant multiplier, but costs substantially more gold.
+
+**Cost philosophy:**
+- **L1 buildings are cheap** — affordable with just passive territory gold income. Every player can build a basic economy without needing ports or mines. This ensures no player is locked out of the game by a bad starting position
+- **L2 upgrades are expensive** — require real gold infrastructure (ports, mines) to afford at scale. Upgrading a few key buildings is achievable, but upgrading your entire network is a major gold investment
+- **The gap between L1 and L2 output is large** — L2 isn't a marginal improvement, it's a significant multiplier (e.g., 2-3× the output of L1). This makes upgrades feel impactful and worth saving for
+
+**Upgrade costs (example):**
+| Building | L1 Cost | L2 Upgrade Cost | Output at L1 | Output at L2 |
+|----------|---------|-----------------|--------------|--------------|
+| Farm | 15g | 80g | Base pop yield | ~2.5× pop yield |
+| City | 50g | 200g | Base pop + 1× terrain multiplier | Higher base pop + stronger terrain multiplier |
+| Mine | 30g | 120g | Base gold from rubies | ~2× gold from rubies |
+| City | 50g | 200g | Base pop + 1× terrain multiplier | Higher base pop + stronger terrain multiplier |
+| Port | 20g | 100g | Base gold generation | ~2× gold generation |
+
+**Strategic implications:**
+- A player with 10 L1 farms is functional but capped. A player with 10 L2 farms has dramatically more pop — but spent ~800g upgrading them
+- Players must decide: build more L1 buildings for breadth, or upgrade existing ones for depth?
+- Gold-rich players (strong ports + mines) can afford to upgrade their entire network, creating a massive pop advantage that justifies their gold infrastructure investment
+- Gold-poor players still have a functional L1 economy — they're not helpless, just capped. They can compete through territory size, smart placement, and military pressure
+
+**Why this works as a gold sink:**
+- Upgrading is never "done" — there's always another building to upgrade
+- The cost scales mean even wealthy players can't upgrade everything instantly
+- It gives gold ongoing purpose throughout mid and late game, alongside defense post upgrades and the missile arms race
+
 ### Port
-- **Purpose**: Only source of gold income
-- **Placement**: Must be placed on a player-owned land tile adjacent to water
-- **Gold generation**: Based on how many water/coast tiles are within its radius. More exposed coastline = more gold per tick
-- **Cost**: Cheap — this is the bootstrap building, players need gold before anything else
-- **Design intent**: Coastal territory becomes valuable. Players fight over shorelines not just for expansion but for economic dominance
+- **Purpose**: Primary coastal gold source
+- **Placement**: Must be placed on a player-owned land tile adjacent to water. **No two ports can share overlapping coastline yield** — if a port's radius covers certain water/coast tiles, no other port's radius can include those same tiles. This creates natural spacing between ports based on geography
+- **Gold generation**: Based on how many water/coast tiles are within its radius. More coastline in radius = substantially more gold per tick. The relationship should be steep — a port with 2× the coastline exposure generates significantly more than 2× the gold. This makes prime port locations (bays, inlets, peninsulas) extremely valuable
+- **Bay/harbor bonus**: A port placed in a deep bay or inlet naturally has coastline wrapping around it on multiple sides, filling its radius with water tiles. These natural harbors are the most productive port locations on the map — mimicking real-world port city geography (think natural harbors like San Francisco Bay, Sydney Harbour, Istanbul)
+- **Straight coastline**: A port on a flat, straight coastline only has water on one side — its radius captures fewer water tiles. Still functional but much less productive than a bay port
+- **Exclusion effect**: Because ports can't share coastline, a player who places a port in a prime bay location locks out other ports from that area. This creates strategic pressure:
+  - First player to claim a bay gets the best port position
+  - A long straight coastline might support multiple spaced-out ports, but each one is mediocre
+  - A deep bay supports one amazing port but no room for others
+  - Players fight over natural harbor locations the way they fight over river valleys for farming
+- **Upgradeable**: Yes — L2 port generates significantly more gold from the same coastline
+- **Cost**: L1 is cheap — this is the bootstrap building, players need gold before anything else
+- **Design intent**: Port placement becomes a geographic puzzle. Players scout coastlines for bays and inlets that maximize water tiles in radius. Prime harbor locations are finite and contested — controlling one is a major economic advantage. The no-overlap rule prevents port spam along a coastline and makes each port a deliberate commitment to a specific stretch of coast
+- **Yield algorithm requirements**:
+  - **Only ocean water counts** — river tiles within the port's radius do not contribute to gold yield. Rivers are for farming and transport, not port trade
+  - **Coastline must be contiguous with the port's landmass** — the algorithm traces coastline outward from the port along its own shore. Coastline from a separate landmass across a strait or channel does not count, even if it's within the radius. This prevents a port on a narrow strait from getting inflated yields from the opposite shore
+  - **How it works**: From the port tile, trace the land-water boundary along the port's own landmass within the radius. Count the number of coastline tiles (land tiles adjacent to ocean) reachable by walking along the shore from the port without crossing water. This is the port's effective coastline
+  - **Bays are naturally rewarded**: A port in a bay has coastline wrapping around it on multiple sides — all contiguous with the port's landmass. The shore-tracing algorithm captures all of it
+  - **Straight coast is naturally weaker**: Coastline only extends in two directions (left and right along the shore) before leaving the radius. Fewer coastline tiles = less gold
 
 ### Farm
 - **Purpose**: Provides base population to a connected city
-- **Placement**: Any owned land tile
+- **Placement**: Any owned land tile (including highland). Farms can be placed on highland tiles but only grassland tiles within the farm's radius contribute pop yield. A farm on highland surrounded by grassland still works — it just reaches into the nearby grassland
 - **Connection rule**: A farm is "connected" to a city if it is within that city's radius
-- **Pop contribution**: Based on how many **grassland** tiles are within the farm's radius. More grassland = more pop yield. Same mechanic as fisheries counting fish patches — farms and fisheries are mirrors of each other for inland vs. coastal terrain
+- **Pop contribution**: Based on how many **grassland** tiles are within the farm's radius. More grassland = more pop yield
 - **Suggested yield**: +0.5 pop per grassland tile in radius. A farm in a lush grassland area might yield 4-5 pop, while one in sparse/mountainous terrain yields very little
-- **River bonus**: Farms placed on or adjacent to a river tile get a multiplier on their yield (e.g., 1.5-2×). River-adjacent grassland is the most fertile land on the map
+- **River bonus**: Farms placed adjacent to a river tile (not on the river itself) get a multiplier on their yield (e.g., 1.5-2×). River-adjacent grassland is the most fertile land on the map
 - **Cost**: Cheap — the bread-and-butter building players place throughout the game
-- **Design intent**: Not all land is equal for farming. Players must scout for grassland-rich areas, just like coastal players scout for fish patches. River-adjacent grassland is premium farmland — the inland equivalent of a fish-rich coast
+- **Design intent**: Not all land is equal for farming. Players must scout for grassland-rich areas. River-adjacent grassland is premium farmland
 
 ### Grassland (map resource)
 - **What it is**: A terrain type assigned to land tiles during map generation. Represents fertile, farmable land
 - **Distribution**: Concentrated in plains, river valleys, and lowlands. Sparse or absent in mountains, highlands, and arid regions
 - **Visibility**: Always visible to all players via terrain coloring (green-tinted tiles vs. brown/grey for non-grassland)
-- **Design intent**: Mirrors fish patches for inland play. Creates varied land value — some inland regions are farming powerhouses, others are barren. River valleys with dense grassland become the inland player's most valuable territory
-
-### Mill
-- **Purpose**: Amplifies population by converting nearby farm output into bonus pop for a connected city
-- **Placement**: Any owned land tile
-- **Connection rules**:
-  - A mill connects to farms within the mill's radius
-  - A mill connects to a city if it is within that city's radius
-  - A mill must be connected to at least one farm AND one city to function
-- **Pop contribution**: Adds bonus pop to its connected city based on how many farms are connected to the mill. More farms = more bonus pop (with diminishing returns per additional farm)
-- **Cost**: Expensive — the mid-game investment building
-- **Suggested formula**: `bonus_pop = base_mill_pop * sqrt(connected_farm_count)` — this gives meaningful gains for the first few farms but diminishing returns beyond ~6-8 farms per mill
-- **Design intent**: Placement puzzle — mill needs to be positioned where it can reach both farms and a city. Creates interesting cluster vs. spread decisions
+- **Design intent**: Creates varied land value — some regions are farming powerhouses, others are barren. River valleys with dense grassland become the most valuable farming territory
 
 ### City
 - **Purpose**: Holds population, which determines troop capacity
 - **Placement**: Any owned land tile, but **must be at least X tiles away from any other city** (yours or enemy's). This exclusion radius prevents city spam and forces strategic commitment to a region
 - **Base pop**: Small fixed amount (e.g., 5 pop just for existing)
-- **Receives pop from**: Connected farms (direct) and connected mills (bonus from their farms)
+- **Receives pop from**: Connected farms (within city's radius)
 - **Troop capacity contribution**: Each pop point increases max troops by a fixed amount (e.g., +20 troops per pop)
 - **Cost**: Moderate
 - **Terrain bonuses** (multiplicative, applied to total pop received by this city):
-  - **River tile**: +50% pop
-  - **Coast tile** (adjacent to water): +50% pop
-  - **River + Coast**: +100% pop (bonuses stack additively: 1.0 + 0.5 + 0.5 = 2.0x)
+  - **Adjacent to river**: +50% pop
+  - **Adjacent to coast** (next to water): +50% pop
+  - **Adjacent to both river + coast**: +100% pop (bonuses stack additively: 1.0 + 0.5 + 0.5 = 2.0x)
+  - Buildings are never placed on water/river tiles — they must be on land tiles adjacent to them
 - **Exclusion zone effects**:
   - Coastal players are hurt most — narrow land strips mean exclusion zones overlap, limiting them to fewer cities spaced along the coast
-  - Inland players benefit — wide open land means more room to space cities and surround each one with farms/mills
+  - Inland players benefit — wide open land means more room to space cities and surround each one with farms
   - This naturally balances the coastal gold advantage: coastal players have more gold but fewer, smaller cities. Inland players have less gold but more cities with denser farm networks
 - **Design intent**: City placement is the highest-stakes decision. The exclusion zone means each city is a long-term commitment to developing a region. Players must choose between optimal terrain (river/coast) and optimal spacing
+
+**City capture mechanics:**
+- **Building supply ownership rule**: All building connections require **same-owner control**. A building only connects to and benefits from other buildings owned by the same player. When territory changes hands, all connections involving captured and non-captured buildings are severed:
+  - A captured city only receives pop from farms owned by the **same player** as the city
+  - A mine only gets gold from ruby deposits within its own radius
+  - Ports and all other buildings follow the same rule
+- **Implications**:
+  - Capturing a city without its farms gives you the terrain bonus (river/coast multiplier) but no pop income — it's an empty shell until you build or capture the surrounding farms
+  - Capturing farms without their city = orphaned (pop goes nowhere)
+  - The defender's orphaned buildings contribute nothing until they build/capture replacements
+  - This rewards thorough conquest over surgical strikes — taking one building is just the first step, capturing or rebuilding the full production chain is what makes it valuable
+  - A city snipe via boat is still powerful (denies the defender their city and severs all connections) but doesn't instantly snowball the attacker's troop count
+- **Building capture vs. destruction**:
+  - **All economic buildings are captured, not destroyed**: Farms, cities, ports, and mines change ownership when their tile is conquered. They go dormant under the new owner until connected to same-owner infrastructure (e.g., a captured farm is dormant until the new owner has a city in range)
+  - **Defense posts are destroyed on capture**: These are military installations — when you fight through them, they're gone. The attacker must build their own to fortify the new border
+  - **Missiles destroy buildings**: Buildings caught in a missile blast radius are destroyed regardless of type. This is the only way to destroy economic infrastructure without conquering the tile
+- **Razing buildings**:
+  - Any building the player owns (whether built or captured) can be **razed** for a partial gold refund
+  - **Raze time**: Razing takes time (e.g., 5-10 seconds). The building shows a "razing" visual during this period. If the tile is lost to an enemy before the raze completes, the raze is cancelled and the building remains intact under the new owner
+  - **Gold refund**: Returns a percentage of the building's original cost (e.g., 30-50%). L2 buildings return more gold than L1. The refund is not full value — there's always a cost to relocating
+  - **Razing your own buildings**: Lets players relocate infrastructure. Found better grassland for a farm? Raze the old one, get some gold back, build a new one in the better spot
+  - **Razing captured buildings**: The key offensive use. Raid enemy territory, capture their port or farm, immediately start razing it for gold, then retreat. Even if you can't hold the territory, you denied them the building and gained gold from it. Creates hit-and-run economic warfare
+  - **Razing enemy buildings you can't use**: If you capture a farm but have no city nearby, it's dormant and useless to you. Razing it converts it to gold you can actually spend, and denies the defender the chance to retake it intact
+  - **Design intent**: Adds a tactical layer to territorial raids. Attackers have a reason to push into enemy territory even temporarily — raze high-value buildings for gold and retreat. Defenders must protect their infrastructure or lose it permanently. Also gives players economic flexibility to restructure their own building networks without total loss
 
 ### Defense Post
 - **Purpose**: Protects borders by making tiles harder for enemies to take
 - **Placement**: On or near owned border tiles
 - **Upgradeable**: Yes — can be upgraded through multiple levels, each costing increasing gold
-- **Level mechanic**: A defense post's effective level is compared against nearby enemy siege towers. If the defense post's level ≥ the siege tower's level, the defense post remains active. If the siege tower's level is higher, the defense post is neutralized
+- **Level mechanic**: Defense posts can be upgraded through multiple levels, each costing increasing gold. Higher-level defense posts make tiles within their radius even more expensive for enemies to take
 - **Cost**: Base cost is moderate. Each upgrade costs significantly more than the last (e.g., L1 = 50g, L2 = 120g, L3 = 250g)
-- **Design intent**: Defense posts are the baseline border protection. Cheap to place, effective against uncontested attacks. But they can be neutralized by siege towers, forcing the defender to upgrade or lose the advantage. Creates a gold-burning arms race on contested borders
-
-### Siege Tower
-- **Purpose**: Offensive building that neutralizes nearby enemy defense posts, enabling breakthrough attacks
-- **Placement**: On owned territory near the border you intend to attack
-- **Upgradeable**: Yes — same level system as defense posts
-- **Level mechanic**: A siege tower neutralizes all enemy defense posts within its radius whose level is ≤ the siege tower's level. If the defense post is upgraded to match or exceed the siege tower, the defense post reactivates. The attacker must then upgrade the siege tower further to re-neutralize it
-- **Radius**: Moderate — large enough to cover a section of the border, not the entire front
-- **Cost**: Expensive. Each upgrade costs significantly more (e.g., L1 = 80g, L2 = 180g, L3 = 400g). Siege towers should cost more than defense posts at each level — the attacker pays a premium to break through
-- **Vulnerability**: If the enemy takes the tile the siege tower is on, it's destroyed. Siege towers near the front are inherently risky investments
-- **Design intent**: The attacker's answer to defense posts. Placing a siege tower is a visible declaration of intent — the defender sees it and must decide whether to upgrade their defense posts, counter-attack the siege tower, or reinforce elsewhere. Creates localized arms races on specific borders
-
-### Border Militarization Mechanic
-```
-ESCALATION CYCLE:
-  Attacker places Siege Tower L1 → Neutralizes enemy Defense Posts L1 in radius
-  Defender upgrades Defense Post to L2 → Defense Post reactivates, siege tower ineffective
-  Attacker upgrades Siege Tower to L2 → Defense Post neutralized again
-  Defender upgrades to L3 → Reactivates again
-  ... and so on
-```
-- Each escalation step costs more gold than the last, creating a drain on both sides
-- The attacker always pays more per level than the defender (siege > defense at each tier) — this ensures defense has a natural advantage, but a richer attacker can overcome it
-- Multiple siege towers can target the same border section, but defense posts in range of ANY higher-level siege tower are neutralized
-- Heavily militarized borders become expensive gold sinks for both sides — players must weigh whether the border is worth the investment or if they should attack elsewhere
-- The visual escalation (L1 → L2 → L3 buildings growing larger/more imposing) gives map readability — players can see where the arms races are happening
+- **Design intent**: Defense posts are the baseline border protection. Cheap to place, effective against uncontested attacks. Upgradeable for stronger defense on contested borders
 
 ### River Gates (Defense Post on River)
 - **What it is**: When a defense post is placed on a tile adjacent to a river, it functions as a river gate — blocking enemy boats from passing through that point on the river
 - **Blocking behavior**: Enemy boats cannot sail past a river gate. They are stopped at the gate's position. Boats can still cross the river laterally (shore to shore) to land troops and attack the gate, but cannot continue upstream or downstream past it
 - **Owner's boats pass freely**: The player who owns the river gate can boat through it without restriction. This makes rivers a fast internal transport network for the defender — troops can be moved quickly between cities along the river while enemies are locked out
 - **Destroying a gate**: The attacker must cross the river, land troops, and take the territory the gate is on to destroy it. Once the gate falls, enemy boats can pass through that point and push further up/downstream to the next gate
-- **Upgradeable**: River gates follow the same level system as regular defense posts. A higher-level gate is harder to take (same siege tower interaction applies)
+- **Upgradeable**: River gates follow the same level system as regular defense posts
 - **Placement strategy**: Defend narrow river points, forks, and where rivers enter your territory. Each gate is a checkpoint that the attacker must break through sequentially
 
 ### River Warfare Dynamics
@@ -184,7 +322,6 @@ ATTACKER'S CAMPAIGN:
 - During the 5-second stabilization window, a **"+" reinforcement button** appears on the beachhead. Clicking it sends an additional 20% of troops from the homeland to reinforce the beachhead (troops arrive instantly as reinforcement, not via boat). The player can click "+" multiple times to keep pouring in troops, each click committing another 20%
 - This gives the attacker an active way to keep the beachhead alive — if the defender is pushing hard, the attacker can pump more troops in to survive the 5 seconds, at the cost of weakening the homeland
 - Once the beachhead is stabilized (after 5 seconds), it becomes regular territory and the player can launch normal vector attacks from it to push deeper inland
-- If the beachhead is isolated across water with no land connection, reinforcement via "+" is not possible — the player must send another boat (after the first completes) to bring more troops
 
 **Stabilization timer (5 seconds):**
 - When troops land, a **5-second countdown timer** starts at the landing point, visible on the map to both attacker and defender (e.g., a pulsating circle with a countdown number)
@@ -206,7 +343,6 @@ ATTACKER'S CAMPAIGN:
 5. Attacker spams "+" as needed to keep beachhead alive (each click = 20% more troops from homeland)
 6. Timer expires → beachhead stabilized → normal territory
 7. Player can now vector attack from beachhead to push inland
-8. If isolated across water, send another boat to bring more troops
 ```
 
 **Interaction with other systems:**
@@ -239,7 +375,7 @@ ATTACKER'S CAMPAIGN:
 - **Use case**: Expanding into wilderness, broad-front pressure against an enemy, casual aggression where you don't need surgical precision
 
 ### Vector Attack (drag-based, new)
-- **How to initiate**: Player drags from a point in their own territory toward enemy territory, creating a directional attack vector
+- **How to initiate**: Player holds **Shift + click-drags** from a point in their own territory toward enemy territory, creating a directional attack vector. Regular click-drag continues to pan the camera as before
 - **Troop commitment**: 20% per vector attack. Player can launch additional vector attacks for more force
 - **Visual**: A **pulsating circle with a troop count number** appears at the origin point of the attack, plus an arrow showing the attack direction. This uses the same visual language as amphibious landings — pulsating circle = active attack, number = troops remaining. The circle and count stay visible for the duration of the attack and are visible to **all players on the map** (allies, enemies, spectators). As troops are spent taking tiles, the number counts down. When it reaches zero, the attack is over and the visual disappears
 - **Troop behavior**: The committed troops flow along the vector direction, concentrating force on that section of the border rather than spreading across all fronts. This is a focused push, not a broad assault
@@ -292,10 +428,9 @@ Both work identically:
 
 | System | Interaction |
 |--------|-------------|
-| Defense posts | Defense posts along the vector path slow the attack — the concentrated troops must fight through them. Siege towers can neutralize defense posts in the vector's path |
-| Siege towers | Place a siege tower first, then launch a vector attack through the neutralized section — a planned breach |
-| Amphibious landings | Once beachhead stabilizes, vector attack inland from the landing point to push deeper |
+| Defense posts | Defense posts along the vector path slow the attack — the concentrated troops must fight through them |
 | Missiles | Soften a section of the enemy border with a missile strike, then follow up with a vector attack through the gap |
+| Amphibious landings | Once beachhead stabilizes, vector attack inland from the landing point to push deeper |
 | River gates | Vector attacks on land don't cross rivers — you need boats for that. But a vector attack can target a river gate from the land side to break it open |
 | General attacks | Both can run simultaneously. A player might launch a vector attack on one front while running a general attack on another to create pressure across multiple fronts |
 | Defensive "+" | Defender reinforces a specific threatened point. Attacker can feint on one front to draw "+" reinforcements, then hit elsewhere |
@@ -335,85 +470,28 @@ No slider, no toggle. One fixed rate, symmetric "+" reinforcement for both attac
 - **Placement**: Any owned land tile
 - **Mechanics**: The silo itself is a one-time gold investment. Once built, the player can spend gold to launch missiles from it. Each missile costs a large amount of gold per launch
 - **Cost**: Very expensive to build. Each missile launch costs additional gold on top (e.g., silo = 500g, each missile = 200g)
-- **Design intent**: Gives gold-heavy players (especially coastal empires with port + trade route income) a way to convert surplus gold into military impact. The extreme cost means missiles are a late-game mechanic — early/mid game players can't afford to waste gold on them when they still need farms, mills, and cities. Even late game, each launch is a significant spend, keeping missiles marginal rather than dominant
+- **Design intent**: Gives gold-heavy players (especially coastal empires with strong port income) a way to convert surplus gold into military impact. The extreme cost means missiles are a late-game mechanic — early/mid game players can't afford to waste gold on them when they still need farms and cities. Even late game, each launch is a significant spend, keeping missiles marginal rather than dominant
 
 ### Missile
 - **Launched from**: A missile silo owned by the player
 - **Target**: Player clicks any visible tile on the map to target
 - **Effect**: Deals damage in a small radius around the impact point. Kills troops in the area and can destroy enemy buildings caught in the blast
-- **Travel time**: Missiles are not instant — they take time to travel from silo to target, giving the defender a window to react (and a reason to have SAMs)
-- **Cost per launch**: Very expensive (e.g., 200g per missile). A player would need substantial ongoing gold income to launch more than a few per game
-- **Design intent**: Surgical strikes, not carpet bombing. A well-placed missile on an enemy's mill cluster or trade hub can cripple their economy, but the cost means you can't spam them. Each launch is a strategic decision
-
-### SAM Site (Surface-to-Air Missile)
-- **Purpose**: Defensive counter to missiles. Intercepts incoming missiles within its radius
-- **Placement**: Any owned land tile
-- **Mechanics**: Automatically intercepts incoming missiles that pass through or target within its defense radius. Each interception consumes the SAM (or a charge — TBD). Player must spend gold to reload/rebuild
-- **Intercept radius**: Moderate — large enough to cover a city and its surrounding infrastructure, but not so large that one SAM protects everything
-- **Cost**: Very expensive (comparable to a silo). Reloading/replacing interceptors also costs gold
-- **Design intent**: Creates an arms race gold sink. Attacker spends gold on missiles, defender spends gold on SAMs. Neither side can ignore the other — undefended cities are vulnerable to strikes, but over-investing in SAMs means less gold for economy. The gold drain from this arms race ensures surplus gold is always consumed in late game
-
-### Late-Game Arms Race Summary
-```
-ATTACKER:  Surplus gold → Missile Silo (one-time) → Missiles (per-launch cost) → Area damage
-DEFENDER:  Surplus gold → SAM Site (one-time) → Interceptors (per-intercept cost) → Missile defense
-```
-- Both sides burn gold continuously — the attacker launching missiles, the defender intercepting them
-- This ensures gold never becomes meaningless, even with a fully built-out economy
-- The extreme costs mean this arms race only kicks in late game when infrastructure is established and gold is flowing
-- A player who neglects SAMs is vulnerable to having key infrastructure (mills, trade hubs, cities) destroyed by surgical strikes
-- A player who neglects silos has no way to break entrenched defensive positions from range
-- Key difference from OpenFront: missiles in this game are so expensive they're a strategic tool, not a spammable weapon. Each launch matters
-
-### Fishery
-- **Purpose**: Coastal pop source — gives coastal players a way to grow city population without inland farmland
-- **Placement**: Must be placed on an owned land tile adjacent to water (same placement rule as ports). Fisheries and ports can be placed on adjacent tiles — they don't compete for the same slot
-- **Connection rule**: Connected to a city if within that city's radius
-- **Pop contribution**: Based on how many **fish patch** tiles are within the fishery's radius. Fish patches are a map resource — special water tiles distributed along coastlines during map generation. More fish patches in radius = more pop, but still less than a river farm + mill combo
-- **Suggested yield**: +0.5 pop per fish patch tile in radius. A fishery near a dense cluster might yield 3-4 pop, while one on barren coast yields almost nothing
-- **Cost**: Cheap (similar to farms)
-- **Does NOT connect to mills**: Fisheries are standalone. Mills only amplify farms. This keeps the inland farm+mill combo as the superior pop engine
-- **Design intent**: Fisheries exist so coastal players aren't stuck with zero pop growth. Fish patches as a map resource mean not all coastline is equal — players must scout for fish-rich shores. Weaker than the farm+mill combo but available where farmland isn't
-
-### Fish Patches (map resource)
-- **What they are**: Special water tiles placed during map generation, rendered with a subtle visual indicator (e.g., slightly different water color, small fish icon)
-- **Distribution**: Scattered along coastlines in clusters of varying density. Some coastal regions are fish-rich, others have none. River mouths / deltas could have denser fish patches as a natural hotspot
-- **Visibility**: Always visible to all players. Part of the map's strategic geography, like rivers and mountains
-- **Design intent**: Adds map-reading to coastal strategy — not all shoreline is worth building fisheries on. Fish-rich coasts become contested territory just like river valleys are for inland players
+- **Travel time**: Missiles are not instant — they take time to travel from silo to target, giving the defender a window to react
+- **Cost per launch**: Very expensive (e.g., 200g for the first missile). Each subsequent missile from the same silo costs more than the last (escalating cost). This ensures missiles are a decisive late-game tool, not spammable
+- **Design intent**: Surgical strikes, not carpet bombing. A well-placed missile on an enemy's farm cluster or city can cripple their economy, but the escalating cost means you get a few impactful shots, not unlimited bombardment. The first player to fire missiles gains a decisive advantage — creating a late-game race to build silos
 
 ### Mine
 - **Purpose**: Extracts gold from ruby deposits. The inland player's primary gold source
 - **Placement**: Must be placed on or adjacent to a ruby deposit
-- **Gold contribution (base)**: Generates gold passively based on how many ruby tiles are within the mine's radius. This is standalone income — no port connection required. Gives inland players a way to fund their economy without coast access
-- **Gold contribution (trade bonus)**: If the mine is connected to a transport hub, which is in turn connected to a port via contiguous territory, the mine's gold output is significantly boosted (e.g., 2-3× multiplier). The trade route makes rubies far more valuable but isn't required for baseline income
+- **Gold generation**: Generates gold passively based on how many ruby tiles are within the mine's radius. This is standalone income — no other buildings required. Gives inland players a way to fund their economy without coast access
 - **Cost**: Moderate
-- **Design intent**: Mines are to inland players what ports are to coastal players — a baseline gold source. But mines on their own produce less gold than a well-placed port. The trade route multiplier closes that gap and can even exceed port income for deep-inland ruby clusters, but at the cost of maintaining a vulnerable supply chain
-
-### Transport Hub
-- **Purpose**: Links mines to ports, boosting mine gold output through trade. The middleman building that makes trade routes work
-- **Placement**: Any owned land tile. Should be placed between mines and ports to bridge the connection
-- **Connection rule**: A transport hub connects a mine to a port if all three (mine, hub, port) are within the same player's contiguous territory. The hub must be within radius of the mine it's boosting
-- **Gold contribution**: Does not generate gold itself. Instead, it enables the trade route multiplier on connected mines. Each mine connected to a hub that reaches a port gets the trade bonus
-- **Cost**: Moderate — infrastructure investment that pays off through boosted mine income
-- **Vulnerability**: If an enemy cuts your territory between the hub and the port (breaking the contiguous land connection), the trade bonus dies and mines revert to base income. The mine itself still generates baseline gold — only the bonus is lost
-- **Design intent**: Creates supply chains that span the map. The hub is the infrastructure piece that rewards players for controlling territory between their inland mines and coastal ports. Defending trade routes becomes a strategic concern — and cutting enemy trade routes is a valid military tactic
+- **Design intent**: Mines are to inland players what ports are to coastal players — a baseline gold source. Placed on highland ruby deposits, they give inland/highland players gold independence
 
 ### Ruby Deposits (map resource)
 - **What they are**: Rare strategic resource tiles on land, placed during map generation. Rendered with a distinct visual (e.g., red/pink sparkle on the tile)
-- **Distribution**: Concentrated inland — mountains, highlands, and deep interior. Rarely near coast. The further from the coast, the more likely rubies appear. This ensures inland territory has unique economic value
+- **Distribution**: Concentrated in highlands. Rarely near coast. The further from the coast, the more likely rubies appear. This ensures inland territory has unique economic value
 - **Visibility**: Always visible to all players. Players can see ruby deposits from the start and plan expansion accordingly
-- **Design intent**: Rubies are the inland gold resource. Mines extract baseline gold from them. Trade routes through transport hubs to ports multiply that gold. This creates a two-tier income system: safe but modest (mine alone) vs. lucrative but vulnerable (mine + trade route)
-
-### Trade Route Summary
-```
-BASELINE:     Ruby Deposit → Mine → Base gold (safe, modest)
-TRADE ROUTE:  Ruby Deposit → Mine → Transport Hub → Contiguous territory → Port → Boosted gold (lucrative, vulnerable)
-```
-- Mines always generate base gold from rubies regardless of trade connections
-- Trade route multiplier (2-3×) activates only when mine → hub → port chain is intact through owned territory
-- If the territorial connection is severed, mines revert to base income — the trade bonus stops instantly but baseline gold continues
-- Multiple mines can connect through one hub, and multiple hubs can feed one port
-- Cutting an enemy's trade route is a strategic military objective — it doesn't kill their economy but significantly weakens it
+- **Design intent**: Rubies are the inland gold resource. Mines extract gold directly from them, giving highland players gold independence without needing coastal access
 
 ---
 
@@ -470,70 +548,68 @@ The map binary already encodes a `mag` value (0-31) per land tile that gets buck
 
 ## Terrain Interactions
 
-| Terrain | Effect on Cities | Effect on Farms | Effect on Mines | Effect on Fisheries | Effect on Ports |
-|---------|-----------------|-----------------|-----------------|---------------------|-----------------|
-| Grassland (land) | — | Each tile in radius = +pop (scales with level) | No rubies here | — | — |
-| Highland (land) | — | Not farmable | Ruby deposits spawn here (scales with level) | — | — |
-| Mountain | Impassable — no buildings, no expansion, no movement. Natural walls and chokepoints | | | | |
-| River tile | +50% pop multiplier | Multiplier on yield (1.5-2×) | No rubies | — | — |
-| Coast (adjacent to water) | +50% pop multiplier | — | — | Placement allowed | Generates gold based on nearby water tiles |
-| River + Coast intersection | +100% pop (both stack) | River multiplier applies | — | Placement allowed; river mouths may have dense fish patches | Generates gold |
-| Fish patches (water tiles) | — | — | — | Each patch in radius = +pop yield | — |
+| Terrain | Effect on Cities | Effect on Farms | Effect on Mines | Effect on Ports |
+|---------|-----------------|-----------------|-----------------|-----------------|
+| Grassland (land) | — | Each tile in radius = +pop (scales with level) | No rubies here | — |
+| Highland (land) | — | Not farmable | Ruby deposits spawn here (scales with level) | — |
+| Mountain | Impassable — no buildings, no expansion, no movement. Natural walls and chokepoints | | | |
+| River tile | +50% pop multiplier | Multiplier on yield (1.5-2×) | No rubies | — |
+| Coast (adjacent to water) | +50% pop multiplier | — | — | Generates gold based on nearby coastline |
+| River + Coast intersection | +100% pop (both stack) | River multiplier applies | — | Generates gold |
 
 ### Map resources summary
 
 | Resource | Where | Exploited by | Yield |
 |----------|-------|-------------|-------|
 | Grassland | Land tiles — plains, river valleys, lowlands | Farms | +pop per grassland tile in farm radius |
-| Fish patches | Water tiles — scattered along coastlines, dense near river mouths | Fisheries | +pop per fish patch in fishery radius |
-| Ruby deposits | Land tiles — mountains, highlands, deep interior (rarely near coast) | Mines | +gold per ruby tile in mine radius (base). 2-3× with trade route via transport hub → port |
+| Ruby deposits | Highland tiles — deep interior, rarely near coast | Mines | +gold per ruby tile in mine radius |
 
-All three work similarly: place a building near the resource → radius captures resource tiles → yield scales with count. Farms/fisheries yield pop, transport hubs yield gold (via port connection).
+All work similarly: place a building near the resource → radius captures resource tiles → yield scales with count.
 
 ### Strategic asymmetry this creates
 
-- **Coastal players**: Rich in base gold (ports) with some pop from fisheries near fish patches. Can build fast but cities stay smaller. Strength is economic tempo and naval control. Want to push inland to access rubies for even more gold
-- **Inland/river players**: Grassland-rich river farms + mills produce massive pop. Sitting on ruby deposits but need coastal access to monetize them. Strength is troop density. Want to push coastward for ports
+- **Coastal players**: Rich in base gold (ports) with grassland farms for pop along the coast. Can build fast. Strength is economic tempo and naval control. Want to push inland to access rubies for even more gold
+- **Highland players**: Gold from ruby mines, plus passive territory income. Need to push toward grassland for farm pop or toward coast for ports. Strength is gold self-sufficiency from rubies
+- **Inland/river players**: Grassland-rich river farms produce massive pop. May sit near ruby deposits for gold income. Strength is troop density. Want to push coastward for ports
 - **Mixed (river-coast) players**: Best of both worlds but these tiles are rare and heavily contested
-- **Trade routes**: The ruby → transport hub → port chain creates cross-map supply lines that are high reward but vulnerable to being cut. Defending trade routes becomes a key strategic concern
-- **Key tension**: Both sides need what the other has. Coastal players want inland rubies, inland players want coastal ports. The map's middle ground is where empires collide
+- **Key tension**: Every terrain type has something unique. Coastal = gold + fish pop. Grassland = farm pop. Highland = ruby gold. Players need diverse terrain to maximize their economy
 
 ---
 
 ## Example Scenarios
 
-### Coastal city (river-coast tile, 4 standard farms, 1 mill)
+*Note: These examples use simplified pop values to illustrate relative differences. Actual yields depend on grassland tile levels and radius sizes determined during playtesting.*
+
+### Coastal city (river-coast tile, 4 standard farms)
 - City base pop: 5
-- 4 farms × 2 pop each: +8 pop
-- Mill with 4 connected farms: 3 × sqrt(4) = +6 pop
-- Subtotal: 19 pop
+- 4 farms on average grassland (~4 pop each based on tiles in radius): +16 pop
+- Subtotal: 21 pop
 - River bonus (+50%) + Coast bonus (+50%) = 2.0× multiplier
-- **Final pop: 38 → 760 troops**
+- **Final pop: 42 → 840 troops**
 
-### Inland river city (river tile, 4 river farms, 1 mill)
+### Inland river city (river tile, 4 river farms)
 - City base pop: 5
-- 4 river farms × 2 pop × 2× river bonus each: +16 pop
-- Mill with 4 connected farms: 3 × sqrt(4) = +6 pop
-- Subtotal: 27 pop
+- 4 farms on rich river grassland (~4 pop each × 1.5-2× river bonus = ~7 pop each): +28 pop
+- Subtotal: 33 pop
 - River city bonus: 1.5× multiplier
-- **Final pop: 40.5 → 810 troops**
+- **Final pop: 49.5 → 990 troops**
 
-### Inland city (no river, 4 standard farms, no mill)
+### Inland city (no river, 4 standard farms on mediocre grassland)
 - City base pop: 5
-- 4 farms × 2 pop each: +8 pop
-- No mill, no terrain bonus (1.0×)
+- 4 farms on sparse grassland (~2 pop each): +8 pop
+- No terrain bonus (1.0×)
 - **Final pop: 13 → 260 troops**
 
-### Pure coastal city (coast tile, 4 fisheries, no farms, no mill)
+### Pure coastal city (coast tile, 4 farms on coastal grassland)
 - City base pop: 5
-- 4 fisheries × ~1.5 pop each: +6 pop
-- Subtotal: 11 pop
+- 4 farms on coastal grassland (~4 pop each): +16 pop
+- Subtotal: 21 pop
 - Coast city bonus: 1.5× multiplier
-- **Final pop: 16.5 → 330 troops**
-- But this player also has ports generating gold, so they can build more cities/buildings faster
+- **Final pop: 31.5 → 630 troops**
+- This player also has ports generating gold, so they can build and upgrade faster
 
 ### Key takeaway
-Pop ranking per city: inland river (810) > coastal mixed (760) > pure coastal (330) > pure inland (260). But gold ranking is reversed: coastal players build faster. The system rewards players who control diverse terrain — a player with both river valleys and coastline has the strongest overall economy.
+Pop ranking per city: inland river (990) > coastal mixed (840) > pure coastal (630) > pure inland on bad grassland (260). But gold ranking is reversed: coastal players build faster. The system rewards players who control diverse terrain — a player with both river valleys and coastline has the strongest overall economy. Grassland quality and river proximity dramatically affect farm yields.
 
 ---
 
@@ -544,7 +620,7 @@ Pop ranking per city: inland river (810) > coastal mixed (760) > pure coastal (3
 - Gold income should scale sub-linearly with port count to prevent runaway economies from pure coastal control
 
 ### Inland viability
-- Inland river players are now competitive through superior farm yields — river farms produce 2× pop, which compounds with mills and river city bonuses
+- Inland river players are now competitive through superior farm yields — river farms produce higher pop, which compounds with river city bonuses
 - Pure inland players (no river access) still need a minimum gold source — options:
   - Passive gold trickle from territory size (small, enough to slowly build farms)
   - Markets: an alternative gold building for inland players that generates less gold than ports
@@ -553,13 +629,12 @@ Pop ranking per city: inland river (810) > coastal mixed (760) > pure coastal (3
 ### Snowball prevention
 - City pop has diminishing returns on troop capacity at very high values
 - Or: troop upkeep that scales with army size, funded by gold, creating a natural ceiling
-- Mill diminishing returns (sqrt formula) already prevents infinite scaling from farm spam
+- Farm upgrade diminishing returns already prevent infinite scaling from farm spam
 
 ### Building density
 - Cities enforce a minimum exclusion radius — no two cities (yours or enemy's) can be placed within X tiles of each other
-- This exclusion radius should be larger than the city's farm/mill connection radius, so each city has a dedicated economic zone that doesn't overlap with other cities
+- This exclusion radius should be larger than the city's farm connection radius, so each city has a dedicated economic zone that doesn't overlap with other cities
 - Suggested: exclusion radius ~1.5-2× the city connection radius
-- Mills should have a moderate radius so one mill can't serve two distant cities — forces commitment to a region
 
 ---
 
@@ -572,24 +647,104 @@ Pop ranking per city: inland river (810) > coastal mixed (760) > pure coastal (3
 
 ### What changes
 - Farms: currently generate flat gold → now generate pop for connected cities
-- Mills: currently boost farm gold → now generate bonus pop based on connected farms
-- Mines and factories: removed or repurposed (gold now comes from ports only)
-- Cities: currently just increase max troops by flat amount → now accumulate pop from farms/mills with terrain multipliers
-- Gold income: currently from land ownership + farms/mines → now exclusively from ports
+- Mines and factories: removed or repurposed (gold now comes from ports and mines on rubies)
+- Cities: currently just increase max troops by flat amount → now accumulate pop from farms with terrain multipliers
+- Gold income: currently from land ownership + farms/mines → now from territory trickle + ports (coastal) + mines (highland rubies)
 
 ### New additions
 - Port building type
 - River/coast terrain bonus detection for cities
 - Pop tracking per city
-- Connection visualization (farm→city, farm→mill→city lines on hover)
+- Connection visualization (farm→city lines on hover)
 
 ---
 
 ## Open Questions
 
-1. **What radius values?** City radius, mill radius, port gold-detection radius — these determine how spread out vs. clustered the economy feels
+1. **What radius values?** City radius, port gold-detection radius — these determine how spread out vs. clustered the economy feels
 2. **Can one farm connect to multiple cities?** If yes, farms between two cities are extra valuable. If no, players must choose which city a farm serves
-3. **Can one mill connect to multiple cities?** Same question — allowing it makes central mills powerful but harder to balance
-4. **Port gold formula**: Linear with water tiles? Sqrt? Needs playtesting to find the right curve
-5. **Do enemy buildings in radius matter?** E.g., does an enemy farm in your mill's radius count? Probably not — only same-owner connections
-6. **Mountain terrain**: Should mountains block farm placement entirely, or just reduce yield?
+3. **Port gold formula**: Linear with coastline tiles? Sqrt? Needs playtesting to find the right curve
+
+---
+
+## P1 Ideas (deferred — add if needed after playtesting)
+
+These are mechanics that may be valuable but aren't essential for the core system. Add them if playtesting reveals specific problems they solve.
+
+### Highland Bazaar (gold trickle building)
+- **Problem it solves**: Highland territory without ruby deposits has no economic value beyond passive territory income. Players may avoid holding highlands entirely
+- **Mechanic**: A building placeable only on highland terrain with a very large radius that generates a modest gold trickle based on highland tiles in range. Cheap at L1, upgradeable to L2. Standalone — no connections needed
+- **Why deferred**: Highlands already have ruby deposits for gold income, and passive territory income provides a baseline. Bazaars may not be needed if ruby distribution is generous enough across highland terrain. Add only if playtesting shows large swaths of ruby-free highlands feel worthless to hold
+
+### City capture cooldown (30 seconds)
+
+### Alliance limit
+- **Problem it solves**: A dominant player could ally with all neighbors and turtle safely with no exposed borders
+- **Mechanic**: Limit active alliances to 1-2 at a time. Forces players to choose who to ally with, creating diplomatic tension and ensuring every player has at least some unprotected borders
+- **Why deferred**: Unlimited alliances may self-balance — large alliance networks are fragile (one expiration breaks the chain) and the 80% win condition means alliances must eventually break. Add only if playtesting shows alliance stacking makes dominant players unchallengeable
+
+### Transport Hub (trade route system)
+- **Problem it solves**: Inland mines produce gold but there's no mechanic to incentivize connecting inland resources to coastal ports. No cross-map supply chain dynamics
+- **Mechanic**: Transport hubs are buildings placed along a chain from a mine to a port. Each hub connects to the next within its radius, creating a relay. The port at the end receives bonus gold based on total rubies connected through the chain. Cutting the chain (enemy takes territory between hubs) kills the bonus
+- **Why deferred**: Adds a building type and a complex connection system (hub-to-hub chaining, contiguous territory checks). The base game already has mines generating standalone gold from rubies. Trade routes add strategic depth but also UI complexity and frustration when chains break. Add only if mines alone feel too simple and there's not enough incentive for cross-map territorial control
+
+### Overextension (territory size penalty)
+- **Problem it solves**: Large players snowball by mindlessly expanding — more territory = more passive gold = more buildings = more troops = more territory
+- **Mechanic**: Attack troop cost per tile scales with total territory size relative to developed infrastructure. Large undeveloped empires become sluggish on offense (defense unaffected). Building infrastructure on territory reduces the penalty. Self-correcting — overextended players naturally stop expanding and develop instead
+- **Why deferred**: The mechanic is invisible and can feel punishing if players don't understand why their attacks suddenly cost more. Needs very clear visual feedback to work well. The base game already has natural expansion limits (gold cost of buildings, defense post placement, finite troop capacity). Add only if playtesting shows large players steamrolling with no natural slowdown
+
+### City capture cooldown (30 seconds)
+- **Problem it solves**: Snowballing from rapid city captures — attacker takes a city and immediately gets stronger, funding the next capture
+- **Mechanic**: When a city is captured, it enters a "securing" state for 30 seconds. During this time it contributes zero pop to the new owner. The previous owner loses the pop immediately, but the attacker doesn't gain it until the cooldown expires
+- **Visual**: Progress bar or timer on the city during the securing phase, visible to all players
+- **Why deferred**: The building supply ownership rule (all connections require same-owner) may already prevent snowballing sufficiently — a captured city with no same-owner farms produces nothing anyway. The cooldown would be redundant if supply cutoff does the job. Add only if playtesting shows cities with nearby same-owner farms still snowball too fast
+
+### Troop upkeep (gold cost per army size)
+- **Problem it solves**: Late-game gold becoming meaningless once infrastructure is fully built out
+- **Mechanic**: Troops cost gold to maintain proportional to army size. Bigger army = bigger gold drain. This naturally caps how large you can grow and means gold is always relevant
+- **Why deferred**: The missile arms race and border defense post upgrades may already provide enough late-game gold sinks. Add only if surplus gold still has no use after those systems are in place
+
+### Building decay / repair
+- **Problem it solves**: Static economies that never change once fully built
+- **Mechanic**: Buildings degrade over time and need gold to repair. Neglected buildings eventually stop producing
+- **Why deferred**: Adds maintenance busywork that may not be fun. The building supply cutoff and conquest mechanics already create dynamic economies through warfare. Add only if the meta becomes too static
+
+### Fog of war for buildings
+- **Problem it solves**: Perfect information makes it too easy to target enemy infrastructure
+- **Mechanic**: Enemy buildings are only visible if you have territory or units nearby. Otherwise you see the terrain but not what's built on it
+- **Why deferred**: Full visibility creates better map-reading and diplomacy. Fog of war adds complexity and may reduce the strategic depth of visible vector attacks and troop counts. Add only if perfect information makes the game too predictable
+
+### Warships (naval combat)
+- **Problem it solves**: Water is purely a transport medium — no naval warfare or sea control
+- **Mechanic**: Warships that patrol sea zones, block enemy boats, and bombard coastal tiles. Would add a full naval theater of war
+- **Why deferred**: The base game already has meaningful naval depth through boats, river gates, and beachhead mechanics. Warships would require balancing an entire second combat system (sea combat rules, ship costs, naval economy). Primary maps are land-focused with water edges — keep water as a boundary and transport medium, not a theater. Add only if the game needs more naval depth after core land mechanics are proven
+
+### Trade route visualizations
+- **Problem it solves**: Trade routes (mine → hub → port) are invisible — players can't see the supply chain on the map
+- **Mechanic**: Animated dots or lines showing goods flowing along trade routes, similar to OpenFront's trade visualization. Makes the economy visually readable
+- **Why deferred**: Functional trade routes work without visualization — the gold income is shown in the HUD. Visual polish should come after core mechanics are stable. Add when the game is playable and needs visual feedback improvements
+
+### Casus Belli (CB) system
+- **Problem it solves**: Large players can steamroll smaller players with no counterbalancing mechanic. Small players need a way to punch up against defended, overextended empires
+- **Mechanic**: Players can fabricate a claim on a painted zone of enemy territory. Fabrication takes 30-60 seconds (invisible to others). Once active, the CB becomes visible to all and grants a 30-50% attack cost discount within the zone. Lasts 2-3 minutes, one CB at a time, same fabrication rate for all players regardless of size
+- **Why deferred**: The existing combat mechanics (vector attacks, annexation, missiles) give small players tactical options. CBs add UI complexity (zone painting, fabrication timer, visible claims). Add only if playtesting shows small players still lack viable offensive options against entrenched large players
+
+### Siege Tower (offensive counter to defense posts)
+- **Problem it solves**: Defense posts can make borders impenetrable, leading to stalemates. Attackers need a building-based way to neutralize them
+- **Mechanic**: An offensive building placed near your border that neutralizes enemy defense posts within its radius. Same level system as defense posts — if the siege tower's level exceeds the defense post's level, the post is neutralized. Creates a gold-burning escalation cycle on contested borders
+- **Why deferred**: Missiles already serve as the stalemate breaker by destroying defense posts from range. Siege towers add another building type and a complex level-comparison mechanic. Add only if missiles alone are insufficient to break defensive stalemates
+
+### SAM Site (missile defense)
+- **Problem it solves**: Missiles have no counter — once a player builds a silo, there's no defense against strikes
+- **Mechanic**: Automatically intercepts incoming missiles within its defense radius. Each interception costs gold to reload. Creates an arms race gold sink between missile silos and SAM sites
+- **Why deferred**: Missiles are designed to be a decisive late-game tiebreaker with escalating costs. Adding SAMs turns missiles into an arms race instead of a decisive tool, which may extend games rather than ending them. The escalating missile cost already prevents spam. Add only if missiles feel too dominant with no counterplay
+
+### Mill (farm pop amplifier)
+- **Problem it solves**: Farm-only pop growth might feel too linear — no way to multiply farm output in a specific region
+- **Mechanic**: A building that connects to both farms and a city. Adds bonus pop to the city based on how many farms are in its radius. Creates a spatial puzzle — the mill needs to be positioned where it reaches both farms and a city. Uses diminishing returns formula (sqrt of connected farm count) to prevent infinite stacking
+- **Why deferred**: Farm upgrades (L1→L2) already provide the "invest more gold for more pop" progression. The city exclusion zone means players can just build another city rather than bridging farms to a distant one. Add only if the farm-only economy feels too simple or there's unreachable grassland between city exclusion zones that mills could bridge
+
+### Fishery & Fish Patches (coastal pop building)
+- **Problem it solves**: Coastal players might lack pop growth if coastlines have no grassland
+- **Mechanic**: Fisheries placed on coast count fish patch tiles (special water tiles) in their radius for pop yield. Fish patches are a map resource scattered along coastlines. Fisheries connect to cities for pop but don't connect to mills
+- **Why deferred**: Coastal territory typically has grassland running up to the water's edge, so coastal players can farm normally. Fisheries add a building type and a map resource (fish patches) for an edge case. Add only if playtesting shows coastal-only spawns without nearby grassland are unviable

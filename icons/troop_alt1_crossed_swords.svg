@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Crossed swords -->
+  <line x1="6" y1="6" x2="26" y2="26" stroke="#c9d1d9" stroke-width="3" stroke-linecap="round"/>
+  <line x1="26" y1="6" x2="6" y2="26" stroke="#c9d1d9" stroke-width="3" stroke-linecap="round"/>
+  <!-- Sword 1 hilt -->
+  <circle cx="6" cy="6" r="2.5" fill="#8b6914"/>
+  <line x1="3" y1="9" x2="9" y2="3" stroke="#8b6914" stroke-width="2" stroke-linecap="round"/>
+  <!-- Sword 2 hilt -->
+  <circle cx="26" cy="6" r="2.5" fill="#8b6914"/>
+  <line x1="23" y1="3" x2="29" y2="9" stroke="#8b6914" stroke-width="2" stroke-linecap="round"/>
+  <!-- Sword tips -->
+  <polygon points="26,26 28,28 24,28" fill="#c9d1d9"/>
+  <polygon points="6,26 8,28 4,28" fill="#c9d1d9"/>
+</svg>

@@ -2,7 +2,7 @@ const CONFIG = {
   WIDTH: 1440,
   HEIGHT: 1800,
   CELL_SIZE: 1,
-  NUM_BOTS: 10,
+  NUM_BOTS: 20,
   STARTING_RADIUS: 10,
   STARTING_TROOPS: 200,
   EXPANSION_TICK_MS: 50,
@@ -17,9 +17,12 @@ let GRID_H = CONFIG.HEIGHT;
 const PLAYER_COLORS = [
   '#4488ff', '#ff4444', '#44bb44', '#ffaa22', '#cc44cc',
   '#44cccc', '#ff6699', '#bbbb22', '#8855dd', '#cc8844', '#44cc88',
+  '#ff8833', '#6644cc', '#cc4488', '#88cc44', '#4466cc',
+  '#dd6655', '#55bbaa', '#aa66cc', '#ccaa44', '#6699cc',
 ];
 const AVAILABLE_MAPS = [
-  { id: 'india_small', name: 'India (Small)', desc: '480x600', playerNames: ['You', 'Maurya', 'Chola', 'Mughal', 'Maratha', 'Gupta', 'Rajput', 'Vijayanagara', 'Pallava', 'Sikh Empire', 'Pandya'] },
+  { id: 'usa', name: 'USA', desc: '1440x810', playerNames: ['You', 'Washington', 'California', 'Montana', 'Colorado', 'Texas', 'Minnesota', 'Illinois', 'Georgia', 'New York', 'Mexico', 'Oregon', 'Idaho', 'Arizona', 'Kansas', 'Ohio', 'Virginia', 'Maine', 'Nebraska', 'Nevada', 'Florida'] },
+  { id: 'usa', name: 'India (Small)', desc: '480x600', playerNames: ['You', 'Maurya', 'Chola', 'Mughal', 'Maratha', 'Gupta', 'Rajput', 'Vijayanagara', 'Pallava', 'Sikh Empire', 'Pandya'] },
   { id: 'indiahd', name: 'India (HD)', desc: '1440x1800', playerNames: ['You', 'Maurya', 'Chola', 'Mughal', 'Maratha', 'Gupta', 'Rajput', 'Vijayanagara', 'Pallava', 'Sikh Empire', 'Pandya'] },
   { id: 'europe', name: 'Europe', desc: '1520x960', playerNames: ['You', 'Roman Empire', 'Byzantine', 'Frankish', 'Viking', 'Castile', 'Habsburg', 'Prussian', 'Kievan Rus', 'Ottoman', 'Polish'] },
 ];
@@ -31,16 +34,12 @@ function hexToRgb(hex) { return { r: parseInt(hex.slice(1, 3), 16), g: parseInt(
 function hash(x, y) { let h = (x * 374761393 + y * 668265263) | 0; return (((h ^ (h >> 13)) * 1274126177) & 0x7fffffff) / 0x7fffffff; }
 const toU32 = (r, g, b) => (0xFF000000 | (b << 16) | (g << 8) | r) >>> 0;
 function lerpColor(a, b, t) { return { r: (a.r * (1 - t) + b.r * t) | 0, g: (a.g * (1 - t) + b.g * t) | 0, b: (a.b * (1 - t) + b.b * t) | 0 }; }
-function maxTroopsForTiles(t, cityCount) { return Math.floor(Math.pow(t, 0.6) * 12 + 150 + (cityCount || 0) * 100); }
+function maxTroopsForTiles(t, cityCount) { return Math.floor(Math.pow(t, 0.6) * 12 + 150 + (cityCount || 0) * 500); }
 function formatTroops(n) { n = Math.floor(n); if (n >= 10000) return (n / 1000).toFixed(0) + 'K'; if (n >= 1000) return (n / 1000).toFixed(1) + 'K'; return '' + n; }
 
 const BUILD_ITEMS = [
   { key: 'city', label: 'City', icon: '■', hotkey: '1', color: '#ffd700' },
-  { key: 'defense_post', label: 'Def Post', icon: '◆', hotkey: '2', color: '#ffffff' },
-  { key: 'farm', label: 'Farm', icon: '☘', hotkey: '3', color: '#66aa44' },
-  { key: 'mine', label: 'Mine', icon: '⛏', hotkey: '4', color: '#aa7744' },
-  { key: 'mill', label: 'Mill', icon: '⚙', hotkey: '5', color: '#88aa55' },
-  { key: 'factory', label: 'Factory', icon: '⚒', hotkey: '6', color: '#aa8855' },
+  { key: 'defense_post', label: 'Fort', icon: '◆', hotkey: '2', color: '#ffffff' },
 ];
 
 class GameRenderer {
@@ -74,6 +73,8 @@ class GameRenderer {
     this.placementMode = null;
     this._leaderboardOpen = true;
     this._helpOpen = false;
+    this._selectingLocation = false;
+    this.totalLandTiles = 0;
     this._lastTroops = 0; this._troopRate = 0; this._troopRateTimer = 0;
     this._lastGold = 0; this._goldRate = 0;
     this._goldBreakdown = { land: 0, farms: 0, mines: 0 };
@@ -87,7 +88,6 @@ class GameRenderer {
       { id: 'camera', title: 'Camera Controls', text: 'Use WASD to pan and scroll to zoom.', completionType: 'camera_controls', highlight: null, arrowTarget: null },
       { id: 'expand', title: 'Expand Your Territory', text: 'Click unclaimed land near your border to expand.', completionType: 'expand_click', highlight: 'border', arrowTarget: null },
       { id: 'attack', title: 'Attack Enemies', text: 'Click enemy territory to attack!', completionType: 'attack_click', highlight: 'enemy_border', arrowTarget: null },
-      { id: 'attack_slider', title: 'Attack Slider', text: 'Drag the slider to control troop allocation.', completionType: 'slider_drag', highlight: 'slider', arrowTarget: null },
       { id: 'city_select', title: 'Build a City', text: 'Click the City button or press 1.', completionType: 'city_selected', highlight: 'build_btn_city', arrowTarget: null },
       { id: 'city_place', title: 'Place Your City', text: 'Click inside your territory to place it. Cities increase max troops.', completionType: 'city_placed', highlight: null, arrowTarget: null },
       { id: 'dpost_select', title: 'Build a Defense Post', text: 'Click the Def Post button or press 2.', completionType: 'dpost_selected', highlight: 'build_btn_dpost', arrowTarget: null },
@@ -106,7 +106,13 @@ class GameRenderer {
       if (e.key === 'Escape') { this.placementMode = null; this._buildPreview = null; this._contextMenu = null; }
     });
     this.initColors();
-    this.startWorker(mapId || 'india_small');
+    this._icons = {};
+    for (const name of ['gold', 'city', 'defense_post', 'troop']) {
+      const img = new Image();
+      img.src = `icons/${name}.svg`;
+      this._icons[name] = img;
+    }
+    this.startWorker(mapId || 'usa');
   }
 
   destroy() {
@@ -121,7 +127,7 @@ class GameRenderer {
     const fitZoom = this.spectateMode
       ? Math.max(w / CONFIG.WIDTH, h / CONFIG.HEIGHT)
       : Math.min(w / CONFIG.WIDTH, h / CONFIG.HEIGHT);
-    this.minZoom = fitZoom * 0.3;
+    this.minZoom = Math.max(w / CONFIG.WIDTH, h / CONFIG.HEIGHT);
     this.fitZoom = fitZoom;
     if (this.zoom < this.minZoom) this.zoom = this.minZoom;
     if (this.spectateMode) {
@@ -145,7 +151,9 @@ class GameRenderer {
   }
 
   clampCamera() {
-    // No clamping — allow panning freely beyond map edges
+    const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
+    this.camX = Math.max(0, Math.min(CONFIG.WIDTH - vw, this.camX));
+    this.camY = Math.max(0, Math.min(CONFIG.HEIGHT - vh, this.camY));
   }
 
   initColors() {
@@ -171,7 +179,7 @@ class GameRenderer {
       return [0, dk(c), dk(lerpColor(c, tan, 0.15)), dk(lerpColor(c, white, 0.25))];
     });
     const terrainRgb = [null, {r:110,g:158,b:72}, {r:186,g:166,b:108}, {r:210,g:206,b:198}];
-    const blendAmounts = [1.0, 0.7, 0.4, 0.2];
+    const blendAmounts = [1.0, 0.85, 0.65, 0.5];
     this.playerGrad = PLAYER_COLORS.map(hex => {
       const c = hexToRgb(hex);
       const tinted = [null, c, lerpColor(c, tan, 0.15), lerpColor(c, white, 0.25)];
@@ -222,8 +230,16 @@ class GameRenderer {
       }
     }
 
+    // Shuffle starting positions for bots (Fisher-Yates)
+    const shuffled = [...STARTING_POSITIONS];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    STARTING_POSITIONS = shuffled;
+
     const R = CONFIG.STARTING_RADIUS;
-    const startIdx = this.spectateMode ? 1 : 0;
+    const startIdx = 1;
     for (let p = startIdx; p < STARTING_POSITIONS.length; p++) {
       const { gx: sx, gy: sy } = STARTING_POSITIONS[p];
       for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
@@ -251,13 +267,18 @@ class GameRenderer {
           console.log('[landing] received fullGrid, changed cells:', changed);
         }
         this.fullRedraw();
-        if (!this.spectateMode) this.setupInput();
+        if (!this.spectateMode) {
+          this.setupInput();
+          this._selectingLocation = true;
+          this._initCloudIntro();
+        }
+        if (msg.totalLandTiles) this.totalLandTiles = msg.totalLandTiles;
         this.ready = true;
         if (!this.spectateMode) {
           this._introStart = performance.now();
-          this._introDuration = 1500;
-          this._introFromZoom = this.fitZoom * 0.3;
-          this._introToZoom = this.fitZoom;
+          this._introDuration = 3000;
+          this._introFromZoom = this.minZoom * 0.6;
+          this._introToZoom = this.minZoom;
           this.zoom = this._introFromZoom;
           const w = this.canvas.width, h = this.canvas.height;
           this.camX = (CONFIG.WIDTH - w / this.zoom) / 2;
@@ -493,12 +514,8 @@ class GameRenderer {
 
   getBuildCost(key) {
     const ps = this.playerData[0] || {};
-    if (key === 'city') return Math.floor(100 * Math.pow(2, ps.cityCount || 0));
-    if (key === 'defense_post') return Math.min(250, 50 * ((ps.dpostCount || 0) + 1));
-    if (key === 'farm') return 30;
-    if (key === 'mine') return 50;
-    if (key === 'mill') return 60;
-    if (key === 'factory') return 80;
+    if (key === 'city') return Math.min(500, Math.floor(50 * Math.pow(2, ps.cityCount || 0)));
+    if (key === 'defense_post') return Math.min(150, 25 + (ps.dpostCount || 0) * 25);
     return 999;
   }
 
@@ -511,7 +528,7 @@ class GameRenderer {
         this._keysDown.add(e.key);
         if (this._tutorialActive) this._checkTutorialCompletion('wasd');
       }
-      const hotkeyMap = { '1': 'city', '2': 'defense_post', '3': 'farm', '4': 'mine', '5': 'mill', '6': 'factory' };
+      const hotkeyMap = { '1': 'city', '2': 'defense_post' };
       if (hotkeyMap[e.key]) {
         // Tutorial input filtering for building hotkeys
         if (this._tutorialActive) {
@@ -533,6 +550,16 @@ class GameRenderer {
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       let deltaY = e.deltaY;
+
+      // Scroll leaderboard if cursor is over it
+      if (this._leaderboardOpen) {
+        const { cx: scx, cy: scy } = this.screenToCanvas(e.clientX, e.clientY);
+        if (scx < 240 && scy < 300) {
+          this._lbScroll = (this._lbScroll || 0) + (deltaY > 0 ? 1 : -1);
+          return;
+        }
+      }
+
       if (e.ctrlKey) { if (Math.abs(deltaY) > 10) return; deltaY *= 10; }
       else if (Math.abs(deltaY) < 2) return;
       const { cx, cy } = this.screenToCanvas(e.clientX, e.clientY);
@@ -553,29 +580,22 @@ class GameRenderer {
       // Check bottom bar clicks
       const { cx, cy } = this.screenToCanvas(e.clientX, e.clientY);
       const barInfo = this._getBottomBarLayout();
-      if (barInfo && cy >= barInfo.y && cy <= barInfo.y + barInfo.h && cx >= barInfo.x && cx <= barInfo.x + barInfo.w) {
-        // Check slider
-        const sliderY = barInfo.y + 42, sliderX = barInfo.x + 10, sliderW = barInfo.w - 20;
-        if (cy >= sliderY && cy <= sliderY + 14) {
-          this.attackRatio = Math.max(0.05, Math.min(1, (cx - sliderX) / sliderW));
-          this._draggingSlider = true; e.preventDefault(); return;
-        }
-        // Check build buttons
-        const btnY = barInfo.y + 62, btnH = 40;
-        if (cy >= btnY && cy <= btnY + btnH) {
-          const btnW = (barInfo.w - 20) / BUILD_ITEMS.length;
-          const btnIdx = Math.floor((cx - barInfo.x - 10) / btnW);
-          if (btnIdx >= 0 && btnIdx < BUILD_ITEMS.length) {
-            const item = BUILD_ITEMS[btnIdx];
-            const cost = this.getBuildCost(item.key);
-            const gold = (this.playerData[0] || {}).gold || 0;
-            if (gold >= cost) {
-              this.placementMode = this.placementMode === item.key ? null : item.key;
-              this._buildPreview = null;
-            }
-            e.preventDefault(); return;
+
+      // Check build buttons (right of bar)
+      for (const item of BUILD_ITEMS) {
+        const bp = this._uiPositions.buildButtons && this._uiPositions.buildButtons[item.key];
+        if (bp && cx >= bp.x && cx <= bp.x + bp.w && cy >= bp.y && cy <= bp.y + bp.h) {
+          const cost = this.getBuildCost(item.key);
+          const gold = (this.playerData[0] || {}).gold || 0;
+          if (gold >= cost) {
+            this.placementMode = this.placementMode === item.key ? null : item.key;
+            this._buildPreview = null;
           }
+          e.preventDefault(); return;
         }
+      }
+
+      if (barInfo && cy >= barInfo.y && cy <= barInfo.y + barInfo.h && cx >= barInfo.x && cx <= barInfo.x + barInfo.w) {
         e.preventDefault(); return;
       }
 
@@ -585,8 +605,8 @@ class GameRenderer {
         this._helpOpen = !this._helpOpen; e.preventDefault(); return;
       }
 
-      // Check leaderboard toggle
-      if (cx < 200 && cy < 24) {
+      // Check leaderboard toggle (top-left area)
+      if (cx >= 10 && cx < 310 && cy >= 10 && cy < 30) {
         this._leaderboardOpen = !this._leaderboardOpen; e.preventDefault(); return;
       }
 
@@ -594,12 +614,6 @@ class GameRenderer {
     });
 
     this.canvas.addEventListener('mousemove', (e) => {
-      if (this._draggingSlider) {
-        const { cx } = this.screenToCanvas(e.clientX, e.clientY);
-        const barInfo = this._getBottomBarLayout();
-        if (barInfo) this.attackRatio = Math.max(0.05, Math.min(1, (cx - barInfo.x - 10) / (barInfo.w - 20)));
-        return;
-      }
       const { gx, gy } = this.screenToGame(e.clientX, e.clientY);
       this._hoverGx = gx; this._hoverGy = gy;
 
@@ -608,61 +622,35 @@ class GameRenderer {
       const overBar = hBarInfo && hcy >= hBarInfo.y && hcy <= hBarInfo.y + hBarInfo.h && hcx >= hBarInfo.x && hcx <= hBarInfo.x + hBarInfo.w;
       const helpX = this.canvas.width - 30, helpY = 30;
       const overHelp = (hcx - helpX) ** 2 + (hcy - helpY) ** 2 < 225;
-      const overLeaderboard = hcx < 200 && hcy < 24;
-      this._hoverUI = overBar || overHelp || overLeaderboard;
+      const overLeaderboard = hcx >= 10 && hcx < 310 && hcy >= 10 && hcy < 30;
+
+      // Detect hovered build button (now outside the bar)
+      let overBuildBtn = false;
+      let newHoverBuildKey = null;
+      const bps = this._uiPositions.buildButtons || {};
+      for (const item of BUILD_ITEMS) {
+        const bp = bps[item.key];
+        if (bp && hcx >= bp.x && hcx <= bp.x + bp.w && hcy >= bp.y && hcy <= bp.y + bp.h) {
+          newHoverBuildKey = item.key;
+          overBuildBtn = true;
+          break;
+        }
+      }
+      this._hoverBuildKey = newHoverBuildKey;
 
       const gp = this._goldPillRect;
       this._hoverGoldPill = gp && hcx >= gp.x && hcx <= gp.x + gp.w && hcy >= gp.y && hcy <= gp.y + gp.h;
 
-      // Detect hovered build button
-      let newHoverBuildKey = null;
-      if (hBarInfo && overBar) {
-        const btnY = hBarInfo.y + 62, btnH = 40;
-        if (hcy >= btnY && hcy <= btnY + btnH) {
-          const btnW = (hBarInfo.w - 20) / BUILD_ITEMS.length;
-          const btnIdx = Math.floor((hcx - hBarInfo.x - 10) / btnW);
-          if (btnIdx >= 0 && btnIdx < BUILD_ITEMS.length) {
-            newHoverBuildKey = BUILD_ITEMS[btnIdx].key;
-          }
-        }
-      }
-      if (newHoverBuildKey !== this._hoverBuildKey) {
-        this._hoverBuildKey = newHoverBuildKey;
-        if (newHoverBuildKey && ['farm','mine','mill','factory'].includes(newHoverBuildKey)) {
-          this._inspectData = null;
-          this._lastInspectIdx = -1;
-          this._inspectAllChains = [];
-          this._inspectAllPending = 0;
-          const matching = (this.econBuildings || []).filter(b => b.type === newHoverBuildKey && b.owner === 0);
-          this._inspectAllPending = matching.length;
-          for (const b of matching) {
-            this.worker.postMessage({ type: 'inspect_building', idx: b.idx });
-          }
-        } else {
-          this._inspectAllChains = null;
-        }
-      }
+      const tb = this._troopBarRect;
+      this._hoverTroopBar = tb && hcx >= tb.x && hcx <= tb.x + tb.w && hcy >= tb.y && hcy <= tb.y + tb.h;
 
-      if (this.placementMode && ['farm','mine','mill','factory'].includes(this.placementMode)) {
-        if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H)
-          this.worker.postMessage({ type: 'preview_econ', gx, gy, buildType: this.placementMode });
-      } else if (!this._mouseIsDown && !overBar) {
-        if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H) {
-          const allBuildings = [...(this.econBuildings || []), ...(this.cities || []).map(c => ({ ...c, type: 'city' }))];
-          let closest = null, closestDist = Math.max(2, Math.ceil(4 / this.zoom));
-          for (const b of allBuildings) {
-            const bx = b.idx % GRID_W, by = (b.idx / GRID_W) | 0;
-            const dist = Math.abs(gx - bx) + Math.abs(gy - by);
-            if (dist < closestDist) { closestDist = dist; closest = b; }
-          }
-          if (closest && closest.type !== 'city') {
-            if (this._lastInspectIdx !== closest.idx) {
-              this._lastInspectIdx = closest.idx;
-              this.worker.postMessage({ type: 'inspect_building', idx: closest.idx });
-            }
-          } else { this._lastInspectIdx = -1; this._inspectData = null; }
-        }
-      }
+      const terr = this._territoryBarRect;
+      this._hoverTerritoryBar = terr && hcx >= terr.x && hcx <= terr.x + terr.w && hcy >= terr.y && hcy <= terr.y + terr.h;
+
+      const ob = this._outboundPillRect;
+      this._hoverOutbound = ob && hcx >= ob.x && hcx <= ob.x + ob.w && hcy >= ob.y && hcy <= ob.y + ob.h;
+
+      this._hoverUI = overBuildBtn || overHelp || overLeaderboard;
 
       if (!this._mouseIsDown) return;
       const dx = e.clientX - this._mouseDownX, dy = e.clientY - this._mouseDownY;
@@ -676,11 +664,6 @@ class GameRenderer {
     });
 
     this.canvas.addEventListener('mouseup', (e) => {
-      if (this._draggingSlider) {
-        if (this._tutorialActive) this._checkTutorialCompletion('slider');
-        this._draggingSlider = false; return;
-      }
-
       if (this._contextMenu && this._contextMenuClick) {
         this._contextMenuClick = false;
         const cm = this._contextMenu;
@@ -698,9 +681,48 @@ class GameRenderer {
         this._contextMenu = null; return;
       }
 
+      if (this._mouseIsDown && !this._didDrag && this.gameOver && this._restartBtn) {
+        const { cx, cy } = this.screenToCanvas(e.clientX, e.clientY);
+        const rb = this._restartBtn;
+        if (cx >= rb.x && cx <= rb.x + rb.w && cy >= rb.y && cy <= rb.y + rb.h) {
+          location.reload();
+          return;
+        }
+      }
+
       if (this._mouseIsDown && !this._didDrag && !this.gameOver) {
         const { gx, gy } = this.screenToGame(e.clientX, e.clientY);
         if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H) {
+          // Location selection mode
+          if (this._selectingLocation) {
+            if (this._cloudIntro) { this._mouseIsDown = false; this._didDrag = false; return; }
+            const idx = gy * GRID_W + gx;
+            if (this.terrain[idx] > 0 && this.grid[idx] === -1) {
+              const R = CONFIG.STARTING_RADIUS;
+              for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+                if (dx * dx + dy * dy > R * R) continue;
+                const x = gx + dx, y = gy + dy;
+                if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) continue;
+                const ci = y * GRID_W + x;
+                if (this.terrain[ci] > 0 && this.grid[ci] < 0) this.grid[ci] = 0;
+              }
+              this.fullRedraw();
+              this.worker.postMessage({ type: 'place_player', gx, gy, radius: R });
+              this._selectingLocation = false;
+              const targetZoom = Math.max(this.fitZoom * 1.5, 3);
+              const toCamX = gx - this.canvas.width / targetZoom / 2;
+              const toCamY = gy - this.canvas.height / targetZoom / 2;
+              this._placeAnim = {
+                start: performance.now(), duration: 1200,
+                fromZoom: this.zoom, toZoom: targetZoom,
+                fromCamX: this.camX, fromCamY: this.camY,
+                toCamX, toCamY,
+              };
+            }
+            this._mouseIsDown = false; this._didDrag = false;
+            return;
+          }
+
           // Tutorial click detection (before processing)
           if (this._tutorialActive) this._checkTutorialCompletion('click', { gx, gy });
 
@@ -728,9 +750,6 @@ class GameRenderer {
             this.worker.postMessage({ type: 'place_city', gx, gy }); this.placementMode = null;
           } else if (this.placementMode === 'defense_post') {
             this.worker.postMessage({ type: 'place_defense_post', gx, gy }); this.placementMode = null;
-          } else if (['farm','mine','mill','factory'].includes(this.placementMode)) {
-            this.worker.postMessage({ type: 'place_econ', gx, gy, buildType: this.placementMode });
-            this.placementMode = null; this._buildPreview = null;
           } else {
             this.worker.postMessage({ type: 'click', gx, gy, ratio: this.attackRatio });
           }
@@ -754,10 +773,113 @@ class GameRenderer {
     });
 
     this.canvas.addEventListener('click', (e) => { e.stopPropagation(); }, true);
+
+    // Touch support
+    let touchStartTime = 0;
+    this.canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        touchStartTime = performance.now();
+        this._mouseDownX = t.clientX; this._mouseDownY = t.clientY;
+        this._didDrag = false; this._camStartX = this.camX; this._camStartY = this.camY;
+        this._mouseIsDown = true;
+        this._touchId = t.identifier;
+      } else if (e.touches.length === 2) {
+        this._mouseIsDown = false; this._didDrag = true;
+        const t0 = e.touches[0], t1 = e.touches[1];
+        this._pinchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        this._pinchZoom = this.zoom;
+        const mx = (t0.clientX + t1.clientX) / 2, my = (t0.clientY + t1.clientY) / 2;
+        const { cx, cy } = this.screenToCanvas(mx, my);
+        this._pinchGameX = cx / this.zoom + this.camX;
+        this._pinchGameY = cy / this.zoom + this.camY;
+      }
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 2) {
+        const t0 = e.touches[0], t1 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+        const scale = dist / this._pinchDist;
+        this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, this._pinchZoom * scale));
+        const mx = (t0.clientX + t1.clientX) / 2, my = (t0.clientY + t1.clientY) / 2;
+        const { cx, cy } = this.screenToCanvas(mx, my);
+        this.camX = this._pinchGameX - cx / this.zoom;
+        this.camY = this._pinchGameY - cy / this.zoom;
+        this.clampCamera();
+        return;
+      }
+      if (!this._mouseIsDown || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dx = t.clientX - this._mouseDownX, dy = t.clientY - this._mouseDownY;
+      if (!this._didDrag && Math.abs(dx) + Math.abs(dy) > 10) this._didDrag = true;
+      if (this._didDrag) {
+        const r = this.canvas.getBoundingClientRect();
+        this.camX = this._camStartX - dx / r.width * this.canvas.width / this.zoom;
+        this.camY = this._camStartY - dy / r.height * this.canvas.height / this.zoom;
+        this.clampCamera();
+      }
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      if (e.touches.length > 0) return;
+      if (this._mouseIsDown && !this._didDrag) {
+        const t = e.changedTouches[0];
+        const fakeEvent = { clientX: t.clientX, clientY: t.clientY, button: 0 };
+        // Simulate click via mouseup handler logic
+        const { gx, gy } = this.screenToGame(t.clientX, t.clientY);
+        if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H && !this.gameOver) {
+          if (this._selectingLocation) {
+            if (!this._cloudIntro) {
+              const idx = gy * GRID_W + gx;
+              if (this.terrain[idx] > 0 && this.grid[idx] === -1) {
+                const R = CONFIG.STARTING_RADIUS;
+                for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+                  if (dx * dx + dy * dy > R * R) continue;
+                  const x = gx + dx, y = gy + dy;
+                  if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) continue;
+                  const ci = y * GRID_W + x;
+                  if (this.terrain[ci] > 0 && this.grid[ci] < 0) this.grid[ci] = 0;
+                }
+                this.fullRedraw();
+                this.worker.postMessage({ type: 'place_player', gx, gy, radius: R });
+                this._selectingLocation = false;
+                const targetZoom = Math.max(this.fitZoom * 1.5, 3);
+                const toCamX = gx - this.canvas.width / targetZoom / 2;
+                const toCamY = gy - this.canvas.height / targetZoom / 2;
+                this._placeAnim = {
+                  start: performance.now(), duration: 1200,
+                  fromZoom: this.zoom, toZoom: targetZoom,
+                  fromCamX: this.camX, fromCamY: this.camY,
+                  toCamX, toCamY,
+                };
+              }
+            }
+          } else if (this.placementMode === 'city') {
+            this.worker.postMessage({ type: 'place_city', gx, gy }); this.placementMode = null;
+          } else if (this.placementMode === 'defense_post') {
+            this.worker.postMessage({ type: 'place_defense_post', gx, gy }); this.placementMode = null;
+          } else {
+            this.worker.postMessage({ type: 'click', gx, gy, ratio: this.attackRatio });
+          }
+        }
+        if (this.gameOver && this._restartBtn) {
+          const { cx, cy } = this.screenToCanvas(t.clientX, t.clientY);
+          const rb = this._restartBtn;
+          if (cx >= rb.x && cx <= rb.x + rb.w && cy >= rb.y && cy <= rb.y + rb.h) {
+            location.reload();
+          }
+        }
+      }
+      this._mouseIsDown = false; this._didDrag = false;
+    }, { passive: false });
   }
 
   _getBottomBarLayout() {
-    const bw = Math.min(500, this.canvas.width - 40), bh = 108;
+    const bw = Math.min(440, this.canvas.width - 40), bh = 60;
     return { x: (this.canvas.width - bw) / 2, y: this.canvas.height - bh - 10, w: bw, h: bh };
   }
 
@@ -772,6 +894,15 @@ class GameRenderer {
         this.camX = (CONFIG.WIDTH - w / this.zoom) / 2;
         this.camY = (CONFIG.HEIGHT - h / this.zoom) / 2;
         if (t >= 1) this._introStart = null;
+      } else if (this._placeAnim) {
+        const a = this._placeAnim;
+        const t = Math.min(1, (performance.now() - a.start) / a.duration);
+        const e = 1 - Math.pow(1 - t, 3);
+        this.zoom = a.fromZoom + (a.toZoom - a.fromZoom) * e;
+        this.camX = a.fromCamX + (a.toCamX - a.fromCamX) * e;
+        this.camY = a.fromCamY + (a.toCamY - a.fromCamY) * e;
+        this.clampCamera();
+        if (t >= 1) this._placeAnim = null;
       } else {
         const pd = this.playerData[0];
         if (this._hoverUI) {
@@ -801,6 +932,7 @@ class GameRenderer {
       ctx.drawImage(this.bufferCanvas, 0, 0);
       ctx.restore();
 
+      if (this._cloudIntro) this.renderCloudIntro();
       if (!this.spectateMode) this.renderOverlays();
     }
     requestAnimationFrame(() => this.render());
@@ -816,13 +948,18 @@ class GameRenderer {
     ctx.translate(-this.camX, -this.camY);
 
     // Cities
+    const cityIcon = this._icons.city;
     for (const city of this.cities) {
       const cx2 = city.idx % GRID_W, cy2 = (city.idx / GRID_W) | 0;
-      const r = Math.max(2, 3 / Math.max(1, this.zoom * 0.3));
-      ctx.fillStyle = '#ffd700'; ctx.fillRect(cx2 - r, cy2 - r, r * 2, r * 2);
-      ctx.strokeStyle = PLAYER_COLORS[city.owner] || '#fff';
-      ctx.lineWidth = Math.max(0.5, 1 / this.zoom);
-      ctx.strokeRect(cx2 - r, cy2 - r, r * 2, r * 2);
+      const sz = Math.max(6, 10 / Math.max(1, this.zoom * 0.3));
+      // Owner color ring
+      ctx.beginPath(); ctx.arc(cx2, cy2, sz * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = PLAYER_COLORS[city.owner] || '#fff'; ctx.fill();
+      if (cityIcon && cityIcon.complete) {
+        ctx.drawImage(cityIcon, cx2 - sz / 2, cy2 - sz / 2, sz, sz);
+      } else {
+        ctx.fillStyle = '#ffd700'; ctx.fillRect(cx2 - sz / 2, cy2 - sz / 2, sz, sz);
+      }
     }
 
     // Defense posts
@@ -834,14 +971,18 @@ class GameRenderer {
         if (Math.abs(hgx - dx) + Math.abs(hgy - dy) <= Math.max(3, Math.ceil(5 / this.zoom))) { hoveringDpost = true; break; }
       }
     }
+    const dpostIcon = this._icons.defense_post;
     for (const dp of (this.defensePosts || [])) {
       const dx = dp.idx % GRID_W, dy = (dp.idx / GRID_W) | 0;
-      const r = Math.max(2, 2.5 / Math.max(1, this.zoom * 0.3));
-      ctx.save(); ctx.translate(dx, dy); ctx.rotate(Math.PI / 4);
-      ctx.fillStyle = PLAYER_COLORS[dp.owner] || '#fff';
-      ctx.fillRect(-r, -r, r * 2, r * 2);
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(0.3, 0.7 / this.zoom);
-      ctx.strokeRect(-r, -r, r * 2, r * 2); ctx.restore();
+      const sz = Math.max(5, 9 / Math.max(1, this.zoom * 0.3));
+      ctx.beginPath(); ctx.arc(dx, dy, sz * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = PLAYER_COLORS[dp.owner] || '#fff'; ctx.fill();
+      if (dpostIcon && dpostIcon.complete) {
+        ctx.drawImage(dpostIcon, dx - sz / 2, dy - sz / 2, sz, sz);
+      } else {
+        ctx.save(); ctx.translate(dx, dy); ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = '#fff'; ctx.fillRect(-sz/2, -sz/2, sz, sz); ctx.restore();
+      }
       if (hoveringDpost && dp.owner === 0) {
         ctx.beginPath(); ctx.arc(dx, dy, 20, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
@@ -870,16 +1011,6 @@ class GameRenderer {
         if (flash > 0) { ctx.globalAlpha = flash * 0.5; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ax, ay, (1 - flash) * 8 + 2, 0, Math.PI * 2); ctx.fill(); }
         ctx.globalAlpha = 1;
       }
-    }
-
-    // Economy buildings
-    for (const eb of (this.econBuildings || [])) {
-      const ex = eb.idx % GRID_W, ey = (eb.idx / GRID_W) | 0;
-      const r = Math.max(1.5, 2 / Math.max(1, this.zoom * 0.3));
-      const econColors = { farm: '#66aa44', mine: '#aa7744', mill: '#88aa55', factory: '#aa8855' };
-      ctx.fillStyle = econColors[eb.type] || '#888';
-      ctx.beginPath(); ctx.arc(ex, ey, r, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = PLAYER_COLORS[eb.owner] || '#fff'; ctx.lineWidth = Math.max(0.3, 0.6 / this.zoom); ctx.stroke();
     }
 
     // Boats
@@ -940,13 +1071,17 @@ class GameRenderer {
       }
     }
 
-    // Placement previews (defense post, city, econ) — keep existing logic
+    // Placement previews (defense post, city)
     if (this.placementMode === 'defense_post' && this._hoverGx !== undefined) {
       const hx = this._hoverGx, hy = this._hoverGy, hIdx = hy * GRID_W + hx;
       const valid = hx >= 0 && hx < GRID_W && hy >= 0 && hy < GRID_H && this.terrain[hIdx] > 0 && this.grid[hIdx] === 0;
       for (const dp of (this.defensePosts || [])) { if (dp.owner !== 0) continue; const ex = dp.idx % GRID_W, ey = (dp.idx / GRID_W) | 0; ctx.beginPath(); ctx.arc(ex, ey, 20, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = Math.max(0.5, 1 / this.zoom); ctx.stroke(); }
       ctx.beginPath(); ctx.arc(hx, hy, 20, 0, Math.PI * 2); ctx.fillStyle = valid ? 'rgba(255,255,255,0.15)' : 'rgba(255,68,68,0.2)'; ctx.fill(); ctx.strokeStyle = valid ? 'rgba(255,255,255,0.7)' : '#ff4444cc'; ctx.lineWidth = Math.max(1, 2 / this.zoom); ctx.stroke();
-      const r = Math.max(2, 2.5 / Math.max(1, this.zoom * 0.3)); ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.PI / 4); ctx.fillStyle = valid ? PLAYER_COLORS[0] : '#ff4444'; ctx.fillRect(-r, -r, r*2, r*2); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(0.3, 0.7 / this.zoom); ctx.strokeRect(-r, -r, r*2, r*2); ctx.restore();
+      const sz = Math.max(5, 9 / Math.max(1, this.zoom * 0.3));
+      ctx.beginPath(); ctx.arc(hx, hy, sz * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = valid ? PLAYER_COLORS[0] : '#ff4444'; ctx.fill();
+      const dpIcon = this._icons.defense_post;
+      if (dpIcon && dpIcon.complete) ctx.drawImage(dpIcon, hx - sz / 2, hy - sz / 2, sz, sz);
       if (valid) { ctx.globalAlpha = 0.3; for (let dy = -20; dy <= 20; dy++) for (let dx = -20; dx <= 20; dx++) { if (Math.abs(dx)+Math.abs(dy) > 20) continue; const tx = hx+dx, ty = hy+dy; if (tx < 0 || tx >= GRID_W || ty < 0 || ty >= GRID_H) continue; const ti = ty*GRID_W+tx; if (this.borderMap[ti] && this.grid[ti] === 0) { ctx.fillStyle = (tx+ty)%2===0 ? '#4488ff' : '#2244aa'; ctx.fillRect(tx, ty, 1, 1); } } ctx.globalAlpha = 1; }
     }
     if (this.placementMode === 'city' && this._hoverGx !== undefined) {
@@ -955,85 +1090,13 @@ class GameRenderer {
       let tooClose = false; const conf = [];
       for (const c of this.cities) { const cx2 = c.idx % GRID_W, cy2 = (c.idx / GRID_W) | 0; if (Math.abs(hx-cx2)+Math.abs(hy-cy2) < 15) { tooClose = true; conf.push(c); } }
       const valid = onOwn && !tooClose;
-      const r = Math.max(2, 3 / Math.max(1, this.zoom * 0.3));
-      ctx.fillStyle = valid ? '#ffd700' : '#ff4444'; ctx.fillRect(hx-r, hy-r, r*2, r*2);
-      ctx.strokeStyle = valid ? PLAYER_COLORS[0] : '#ff4444'; ctx.lineWidth = Math.max(0.5, 1/this.zoom); ctx.strokeRect(hx-r, hy-r, r*2, r*2);
+      const sz = Math.max(6, 10 / Math.max(1, this.zoom * 0.3));
+      ctx.beginPath(); ctx.arc(hx, hy, sz * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = valid ? PLAYER_COLORS[0] : '#ff4444'; ctx.fill();
+      const cIcon = this._icons.city;
+      if (cIcon && cIcon.complete) ctx.drawImage(cIcon, hx - sz / 2, hy - sz / 2, sz, sz);
       for (const c of conf) { const cx2 = c.idx % GRID_W, cy2 = (c.idx / GRID_W) | 0; ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(cx2, cy2); ctx.strokeStyle = '#ff4444aa'; ctx.lineWidth = Math.max(0.5, 1/this.zoom); ctx.stroke(); }
-      if (valid) { ctx.fillStyle = '#ffd700'; ctx.font = `${Math.max(4, 8/this.zoom)}px monospace`; ctx.textAlign = 'center'; ctx.fillText('+100 max troops', hx, hy-r-3); }
-    }
-    if (this._buildPreview && this.placementMode) {
-      const pv = this._buildPreview, hx = this._hoverGx, hy = this._hoverGy;
-      if (pv.type === 'farm' || pv.type === 'mine') {
-        ctx.globalAlpha = 0.35; ctx.fillStyle = '#44ff44'; for (const t of (pv.claimable||[])) ctx.fillRect(t%GRID_W,(t/GRID_W)|0,1,1);
-        ctx.fillStyle = '#ff4444'; for (const t of (pv.claimed||[])) ctx.fillRect(t%GRID_W,(t/GRID_W)|0,1,1); ctx.globalAlpha = 1;
-        if (hx !== undefined) { ctx.beginPath(); ctx.arc(hx, hy, pv.radius, 0, Math.PI*2); ctx.strokeStyle = '#ffffff88'; ctx.lineWidth = Math.max(0.3, 0.5/this.zoom); ctx.stroke(); }
-        ctx.globalAlpha = 0.6; for (const cidx of (pv.connectedProcessors||[])) { const cx2 = cidx%GRID_W, cy2 = (cidx/GRID_W)|0; ctx.fillStyle = '#44ffff'; ctx.beginPath(); ctx.arc(cx2, cy2, 3, 0, Math.PI*2); ctx.fill(); if (hx !== undefined) { ctx.beginPath(); ctx.moveTo(hx,hy); ctx.lineTo(cx2,cy2); ctx.strokeStyle = '#44ffffaa'; ctx.lineWidth = Math.max(0.5, 1/this.zoom); ctx.stroke(); } } ctx.globalAlpha = 1;
-      } else {
-        ctx.globalAlpha = 0.6; for (const cidx of (pv.connected||[])) { const cx2 = cidx%GRID_W, cy2 = (cidx/GRID_W)|0; ctx.fillStyle = '#44ffff'; ctx.beginPath(); ctx.arc(cx2, cy2, 3, 0, Math.PI*2); ctx.fill(); if (hx !== undefined) { ctx.beginPath(); ctx.moveTo(hx,hy); ctx.lineTo(cx2,cy2); ctx.strokeStyle = '#44ffffaa'; ctx.lineWidth = Math.max(0.5, 1/this.zoom); ctx.stroke(); } } ctx.globalAlpha = 1;
-        if (hx !== undefined) { ctx.beginPath(); ctx.arc(hx,hy,pv.radius,0,Math.PI*2); ctx.strokeStyle = '#ffffff88'; ctx.lineWidth = Math.max(0.3, 0.5/this.zoom); ctx.stroke(); }
-        if (pv.stackCount > 0 && hx !== undefined) { ctx.fillStyle = '#ff4444'; ctx.font = `${Math.max(4,8/this.zoom)}px monospace`; ctx.textAlign = 'center'; ctx.fillText(`-${Math.round(pv.stackCount*40)}% penalty`, hx, hy-pv.radius-3); }
-      }
-    }
-
-    // Inspect overlay
-    if (this._inspectData && !this.placementMode) {
-      const chain = this._inspectData;
-      const tileColor = (chain.type === 'farm' || chain.type === 'mill') ? '#44ff44' : '#cc8844';
-      ctx.globalAlpha = 0.3; ctx.fillStyle = tileColor; for (const t of (chain.allClaimedTiles||[])) ctx.fillRect(t%GRID_W,(t/GRID_W)|0,1,1); ctx.globalAlpha = 1;
-      for (const prod of (chain.producers||[])) {
-        const px = prod.idx%GRID_W, py = (prod.idx/GRID_W)|0;
-        ctx.beginPath(); ctx.arc(px,py,Math.max(2,3/this.zoom),0,Math.PI*2); ctx.fillStyle = tileColor+'aa'; ctx.fill(); ctx.strokeStyle = '#ffffffcc'; ctx.lineWidth = Math.max(0.3,0.6/this.zoom); ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.font = `${Math.max(4, 8/this.zoom)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText(`${prod.output.toFixed(1)}g`, px, py - Math.max(2, 4/this.zoom));
-      }
-      for (const proc of (chain.processors||[])) { const mx = proc.idx%GRID_W, my = (proc.idx/GRID_W)|0; ctx.beginPath(); ctx.arc(mx,my,Math.max(2,3/this.zoom),0,Math.PI*2); ctx.fillStyle = '#44ffffaa'; ctx.fill(); ctx.strokeStyle = '#ffffffcc'; ctx.lineWidth = Math.max(0.3,0.6/this.zoom); ctx.stroke(); ctx.beginPath(); ctx.arc(mx,my,proc.radius,0,Math.PI*2); ctx.strokeStyle = '#ffffff44'; ctx.lineWidth = Math.max(0.3,0.5/this.zoom); ctx.stroke(); ctx.globalAlpha = 0.5; for (const prod of (chain.producers||[])) { const px = prod.idx%GRID_W, py = (prod.idx/GRID_W)|0; ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(px,py); ctx.strokeStyle = '#44ffffaa'; ctx.lineWidth = Math.max(0.5,1/this.zoom); ctx.stroke(); } ctx.globalAlpha = 1; }
-      const hbx = chain.idx%GRID_W, hby = (chain.idx/GRID_W)|0; ctx.beginPath(); ctx.arc(hbx,hby,chain.radius,0,Math.PI*2); ctx.strokeStyle = '#ffffff88'; ctx.lineWidth = Math.max(0.5,1/this.zoom); ctx.stroke();
-    }
-
-    // Aggregate inspect overlay (hovering build button in bottom bar)
-    if (this._hoverBuildKey && ['farm','mine','mill','factory'].includes(this._hoverBuildKey) && !this.placementMode && !this._inspectData && this._inspectAllChains && this._inspectAllChains.length > 0) {
-      const hoverType = this._hoverBuildKey;
-      const tileColor = (hoverType === 'farm' || hoverType === 'mill') ? '#44ff44' : '#cc8844';
-      const seenProducers = new Set(), seenProcessors = new Set(), seenTiles = new Set();
-      const allProducers = [], allProcessors = [];
-      for (const chain of this._inspectAllChains) {
-        for (const t of (chain.allClaimedTiles || [])) seenTiles.add(t);
-        for (const prod of (chain.producers || [])) {
-          if (!seenProducers.has(prod.idx)) { seenProducers.add(prod.idx); allProducers.push(prod); }
-        }
-        for (const proc of (chain.processors || [])) {
-          if (!seenProcessors.has(proc.idx)) { seenProcessors.add(proc.idx); allProcessors.push(proc); }
-        }
-      }
-      ctx.globalAlpha = 0.3; ctx.fillStyle = tileColor;
-      for (const t of seenTiles) ctx.fillRect(t % GRID_W, (t / GRID_W) | 0, 1, 1);
-      ctx.globalAlpha = 1;
-      for (const prod of allProducers) {
-        const px = prod.idx % GRID_W, py = (prod.idx / GRID_W) | 0;
-        ctx.beginPath(); ctx.arc(px, py, Math.max(2, 3/this.zoom), 0, Math.PI*2);
-        ctx.fillStyle = tileColor + 'aa'; ctx.fill();
-        ctx.strokeStyle = '#ffffffcc'; ctx.lineWidth = Math.max(0.3, 0.6/this.zoom); ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.font = `${Math.max(4, 8/this.zoom)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText(`${prod.output.toFixed(1)}g`, px, py - Math.max(2, 4/this.zoom));
-      }
-      for (const proc of allProcessors) {
-        const mx = proc.idx % GRID_W, my = (proc.idx / GRID_W) | 0;
-        ctx.beginPath(); ctx.arc(mx, my, Math.max(2, 3/this.zoom), 0, Math.PI*2);
-        ctx.fillStyle = '#44ffffaa'; ctx.fill();
-        ctx.strokeStyle = '#ffffffcc'; ctx.lineWidth = Math.max(0.3, 0.6/this.zoom); ctx.stroke();
-        ctx.beginPath(); ctx.arc(mx, my, proc.radius, 0, Math.PI*2);
-        ctx.strokeStyle = '#ffffff44'; ctx.lineWidth = Math.max(0.3, 0.5/this.zoom); ctx.stroke();
-        ctx.globalAlpha = 0.5;
-        for (const prod of allProducers) {
-          const px = prod.idx % GRID_W, py = (prod.idx / GRID_W) | 0;
-          const dist2 = (mx - px) * (mx - px) + (my - py) * (my - py);
-          if (dist2 <= proc.radius * proc.radius) {
-            ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(px, py);
-            ctx.strokeStyle = '#44ffffaa'; ctx.lineWidth = Math.max(0.5, 1/this.zoom); ctx.stroke();
-          }
-        }
-        ctx.globalAlpha = 1;
-      }
+      if (valid) { ctx.fillStyle = '#ffd700'; ctx.font = `${Math.max(4, 8/this.zoom)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText('+500 max troops', hx, hy - sz / 2 - 3); }
     }
 
     // Player labels
@@ -1050,23 +1113,60 @@ class GameRenderer {
     ctx.restore();
 
     // === SCREEN-SPACE HUD ===
+
+    // Location selection overlay (before HUD)
+    if (this._selectingLocation) {
+      const cloudsActive = !!this._cloudIntro;
+      const cloudT = cloudsActive ? (performance.now() - this._cloudIntro.start) / this._cloudIntro.duration : 1;
+      const textFade = cloudsActive ? Math.max(0, (cloudT - 0.6) / 0.4) : 1;
+
+      if (textFade > 0) {
+        ctx.globalAlpha = textFade;
+
+        // Dark backdrop box
+        const boxW = 560, boxH = 110;
+        const boxX = (this.canvas.width - boxW) / 2, boxY = this.canvas.height / 2 - boxH / 2 - 10;
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.85)';
+        ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 12); ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 12); ctx.stroke();
+
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = 'bold 32px sans-serif'; ctx.fillStyle = '#ffd700';
+        ctx.fillText('Click anywhere to choose your start', this.canvas.width / 2, boxY + 30);
+        ctx.font = 'bold 18px sans-serif'; ctx.fillStyle = '#e6edf3';
+        ctx.fillText('Conquer 80% of the map to win. Good luck!', this.canvas.width / 2, boxY + 62);
+        ctx.font = '14px sans-serif'; ctx.fillStyle = '#8b949e';
+        ctx.fillText('Pick your starting location wisely', this.canvas.width / 2, boxY + 90);
+        ctx.globalAlpha = 1;
+      }
+
+      if (!cloudsActive && this._hoverGx !== undefined && this._hoverGy !== undefined) {
+        const hx = this._hoverGx, hy = this._hoverGy;
+        const hIdx = hy * GRID_W + hx;
+        if (hx >= 0 && hx < GRID_W && hy >= 0 && hy < GRID_H && this.terrain && this.terrain[hIdx] > 0 && this.grid[hIdx] === -1) {
+          ctx.save(); ctx.scale(this.zoom, this.zoom); ctx.translate(-this.camX, -this.camY);
+          const R = CONFIG.STARTING_RADIUS;
+          ctx.beginPath(); ctx.arc(hx, hy, R, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(68,136,255,0.25)'; ctx.fill();
+          ctx.strokeStyle = '#4488ff'; ctx.lineWidth = Math.max(1, 2 / this.zoom); ctx.stroke();
+          ctx.restore();
+        }
+      }
+      if (this._tutorialActive) this.renderTutorial();
+      return;
+    }
+
     const max = maxTroopsForTiles(ps.cellCount || 0, ps.cityCount || 0);
     const gold = ps.gold || 0;
     const troops = ps.troops || 0;
 
-    // --- Status text (top center) ---
-    let st = 'IDLE', sc = '#44cc88';
-    if (ps.expanding && ps.attackTarget !== null) {
-      if (ps.attackTarget === -1) { st = 'TAKING WILDERNESS'; sc = '#cccc44'; }
-      else { st = 'ATTACKING ' + PLAYER_NAMES[ps.attackTarget].toUpperCase(); sc = '#ff6644'; }
-    }
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.font = 'bold 13px monospace'; ctx.fillStyle = sc;
-    ctx.fillText(st, this.canvas.width / 2, 12);
+    // --- Placement text (top center, only when placing) ---
     if (this.placementMode) {
-      const labels = { city: 'PLACING CITY', defense_post: 'PLACING DEFENSE POST', farm: 'PLACING FARM', mine: 'PLACING MINE', mill: 'PLACING MILL', factory: 'PLACING FACTORY' };
-      ctx.fillStyle = '#ffd700'; ctx.font = '11px monospace';
-      ctx.fillText((labels[this.placementMode] || 'PLACING') + ' — click to place, Esc to cancel', this.canvas.width / 2, 28);
+      const labels = { city: 'PLACING CITY', defense_post: 'PLACING FORT' };
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText((labels[this.placementMode] || 'PLACING') + ' — click to place, Esc to cancel', this.canvas.width / 2, 12);
     }
 
     // --- Bottom bar ---
@@ -1076,139 +1176,273 @@ class GameRenderer {
     ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(bar.x, bar.y, bar.w, bar.h, 10); ctx.stroke();
 
-    // Row 1: troop rate pill | troop bar | gold pill
-    const row1Y = bar.y + 8;
-    const pillH = 22, pillR = 6;
+    // Row 0: status + territory progress
+    const row0Y = bar.y + 6;
+    let st = 'IDLE', sc = '#44cc88';
+    if (ps.expanding && ps.attackTarget !== null) {
+      if (ps.attackTarget === -1) { st = 'TAKING WILDERNESS'; sc = '#cccc44'; }
+      else { st = 'ATTACKING ' + PLAYER_NAMES[ps.attackTarget].toUpperCase(); sc = '#ff6644'; }
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = sc;
+    ctx.fillText(st, bar.x + 12, row0Y + 10);
+    const stW = ctx.measureText(st).width;
 
-    // Troop rate pill (left)
-    const rateStr = `+${Math.max(0, this._troopRate).toFixed(0)}/s`;
-    ctx.font = 'bold 11px monospace';
-    const rateW = ctx.measureText(rateStr).width + 16;
-    const rateColor = this._troopRate > 0 ? '#44bb44' : '#888';
-    ctx.strokeStyle = rateColor; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.roundRect(bar.x + 10, row1Y, rateW, pillH, pillR); ctx.stroke();
-    ctx.fillStyle = rateColor; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(rateStr, bar.x + 10 + rateW / 2, row1Y + pillH / 2);
+    // Outbound troops pill
+    const outbound = Math.floor(ps.attackTroops || 0) + (ps.beachheads || []).reduce((s, b) => s + Math.floor(b.troops), 0);
+    const outStr = `Outbound: ${formatTroops(outbound)}`;
+    ctx.font = 'bold 11px sans-serif';
+    const outW = ctx.measureText(outStr).width + 14;
+    const outX = bar.x + 12 + stW + 12;
+    const outH = 18;
+    this._outboundPillRect = { x: outX, y: row0Y + 1, w: outW, h: outH };
+    ctx.fillStyle = outbound > 0 ? 'rgba(255,102,68,0.15)' : 'rgba(255,255,255,0.05)';
+    ctx.beginPath(); ctx.roundRect(outX, row0Y + 1, outW, outH, 4); ctx.fill();
+    ctx.strokeStyle = outbound > 0 ? '#ff6644' : 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(outX, row0Y + 1, outW, outH, 4); ctx.stroke();
+    ctx.fillStyle = outbound > 0 ? '#ff8866' : '#9ca3af';
+    ctx.fillText(outStr, outX + 7, row0Y + 10);
 
-    // Gold pill (right)
+    if (this.totalLandTiles > 0) {
+      const myPct = (ps.cellCount || 0) / this.totalLandTiles;
+      const progW = 140, progH = 10, progX = bar.x + bar.w - 12 - progW;
+      this._territoryBarRect = { x: progX, y: row0Y + 4, w: progW, h: progH };
+      ctx.fillStyle = '#1a1a2e';
+      ctx.beginPath(); ctx.roundRect(progX, row0Y + 4, progW, progH, 4); ctx.fill();
+      const fillW = Math.min(1, myPct) * progW;
+      ctx.fillStyle = myPct >= 0.8 ? '#44ff44' : myPct >= 0.5 ? '#ccaa22' : '#4488ff';
+      ctx.beginPath(); ctx.roundRect(progX, row0Y + 4, fillW, progH, 4); ctx.fill();
+      // 80% marker line
+      const markerX = progX + 0.8 * progW;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(markerX, row0Y + 3); ctx.lineTo(markerX, row0Y + 4 + progH + 1); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#ddd';
+      ctx.fillText(`${Math.round(myPct * 100)}%`, progX + progW / 2, row0Y + 9);
+    }
+
+    // Row 1: troop bar | gold pill
+    const row1Y = bar.y + 30;
+    const pillH = 26, pillR = 6;
+
+    // Gold pill
     const goldRateStr = ` +${this._goldRate.toFixed(0)}/m`;
     const goldStr = `${Math.floor(gold)}g${goldRateStr}`;
-    const goldW = ctx.measureText(goldStr).width + 20;
+    ctx.font = 'bold 14px sans-serif';
+    const iconSz = pillH - 6;
+    const goldW = ctx.measureText(goldStr).width + 22 + iconSz + 2;
     const goldPillX = bar.x + bar.w - 10 - goldW;
     this._goldPillRect = { x: goldPillX, y: row1Y, w: goldW, h: pillH };
     ctx.strokeStyle = this._hoverGoldPill ? '#ffe866' : '#ffd700'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.roundRect(goldPillX, row1Y, goldW, pillH, pillR); ctx.stroke();
     if (this._hoverGoldPill) { ctx.fillStyle = 'rgba(255,215,0,0.08)'; ctx.fill(); }
-    ctx.fillStyle = '#ffd700';
-    ctx.fillText(goldStr, goldPillX + goldW / 2, row1Y + pillH / 2);
+    if (this._icons.gold.complete) ctx.drawImage(this._icons.gold, goldPillX + 6, row1Y + 3, iconSz, iconSz);
+    ctx.fillStyle = '#ffd700'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(goldStr, goldPillX + iconSz + 6 + (goldW - iconSz - 6) / 2, row1Y + pillH / 2);
 
-    // Troop bar (center)
-    const tbX = bar.x + 10 + rateW + 10, tbW = bar.w - 20 - rateW - goldW - 20;
-    ctx.fillStyle = '#1a1a2e'; ctx.beginPath(); ctx.roundRect(tbX, row1Y + 2, tbW, pillH - 4, 4); ctx.fill();
+    // Troop bar
+    const tbX = bar.x + 10, tbW = bar.w - 20 - goldW - 10;
+    this._troopBarRect = { x: tbX, y: row1Y, w: tbW, h: pillH };
+    ctx.fillStyle = '#1a1a2e'; ctx.beginPath(); ctx.roundRect(tbX, row1Y + 1, tbW, pillH - 2, 5); ctx.fill();
     const f = Math.min(1, troops / Math.max(1, max));
-    ctx.fillStyle = f < 0.2 ? '#cc4444' : f < 0.45 ? '#4488ff' : '#ccaa22';
-    ctx.beginPath(); ctx.roundRect(tbX, row1Y + 2, tbW * f, pillH - 4, 4); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = '10px monospace';
-    ctx.fillText(`${formatTroops(troops)} / ${formatTroops(max)}`, tbX + tbW / 2, row1Y + pillH / 2);
+    // Gradient: red (low) -> green (peak ~50%) -> yellow (near cap)
+    const grad = ctx.createLinearGradient(tbX, 0, tbX + tbW, 0);
+    grad.addColorStop(0, '#cc4444');
+    grad.addColorStop(0.5, '#44bb44');
+    grad.addColorStop(1, '#ccaa22');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.roundRect(tbX, row1Y + 1, tbW * f, pillH - 2, 5); ctx.fill();
+    if (this._icons.troop.complete) ctx.drawImage(this._icons.troop, tbX + 4, row1Y + 3, iconSz, iconSz);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(`${formatTroops(troops)} / ${formatTroops(max)}`, tbX + tbW / 2 + iconSz / 2, row1Y + pillH / 2);
 
-    // Row 2: attack slider
-    const row2Y = bar.y + 38;
-    ctx.fillStyle = '#1a1a2e';
-    ctx.beginPath(); ctx.roundRect(bar.x + 10, row2Y, bar.w - 20, 14, 4); ctx.fill();
-    ctx.fillStyle = '#335588';
-    ctx.beginPath(); ctx.roundRect(bar.x + 10, row2Y, (bar.w - 20) * this.attackRatio, 14, 4); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
-    ctx.fillText(`⚔ Attack: ${Math.round(this.attackRatio * 100)}%`, bar.x + bar.w / 2, row2Y + 7);
-
-    // Cache slider position for tutorial
-    this._uiPositions.slider = { x: bar.x + 10, y: row2Y, w: bar.w - 20, h: 14 };
+    // Build buttons (to the right of the bar)
     this._uiPositions.buildButtons = {};
-
-    // Row 3: build buttons
-    const row3Y = bar.y + 58;
-    const btnW = (bar.w - 20) / BUILD_ITEMS.length, btnH = 42;
+    const btnW = 54, btnH = bar.h;
+    const btnStartX = bar.x + bar.w + 6;
     for (let i = 0; i < BUILD_ITEMS.length; i++) {
       const item = BUILD_ITEMS[i];
-      const bx = bar.x + 10 + i * btnW;
+      const bx = btnStartX + i * (btnW + 4);
+      const by = bar.y;
       const cost = this.getBuildCost(item.key);
       const canAfford = gold >= cost;
       const selected = this.placementMode === item.key;
       const hovered = this._hoverBuildKey === item.key && !selected;
 
-      ctx.fillStyle = selected ? 'rgba(68,136,255,0.25)' : hovered ? 'rgba(255,255,255,0.08)' : 'rgba(26,26,46,0.8)';
-      ctx.beginPath(); ctx.roundRect(bx + 2, row3Y, btnW - 4, btnH, 5); ctx.fill();
-      ctx.strokeStyle = selected ? '#4488ff' : hovered ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect(bx + 2, row3Y, btnW - 4, btnH, 5); ctx.stroke();
+      ctx.fillStyle = selected ? 'rgba(68,136,255,0.25)' : hovered ? 'rgba(0,0,0,0.45)' : 'rgba(31,41,55,0.92)';
+      ctx.beginPath(); ctx.roundRect(bx, by, btnW, btnH, 8); ctx.fill();
+      ctx.strokeStyle = selected ? '#4488ff' : hovered ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(bx, by, btnW, btnH, 8); ctx.stroke();
 
       ctx.globalAlpha = canAfford ? 1 : 0.35;
-      ctx.fillStyle = item.color; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(item.icon, bx + btnW / 2, row3Y + 14);
-      ctx.fillStyle = '#ccc'; ctx.font = '8px monospace';
-      ctx.fillText(item.label, bx + btnW / 2, row3Y + 26);
-      ctx.fillStyle = '#ffd700'; ctx.font = '8px monospace';
-      ctx.fillText(`${cost}g [${item.hotkey}]`, bx + btnW / 2, row3Y + 36);
+      const btnIcon = this._icons[item.key];
+      if (btnIcon && btnIcon.complete) {
+        const btnIconSz = 22;
+        ctx.drawImage(btnIcon, bx + btnW / 2 - btnIconSz / 2, by + 4, btnIconSz, btnIconSz);
+      } else {
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillStyle = item.color; ctx.font = '16px sans-serif';
+        ctx.fillText(item.icon, bx + btnW / 2, by + 6);
+      }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = '#ddd'; ctx.font = 'bold 9px sans-serif';
+      ctx.fillText(item.label, bx + btnW / 2, by + 28);
+      ctx.fillStyle = '#ffd700'; ctx.font = '10px sans-serif';
+      ctx.fillText(`${cost}g [${item.hotkey}]`, bx + btnW / 2, by + 40);
       ctx.globalAlpha = 1;
 
-      // Cache button position for tutorial
-      this._uiPositions.buildButtons[item.key] = { x: bx + 2, y: row3Y, w: btnW - 4, h: btnH };
+      this._uiPositions.buildButtons[item.key] = { x: bx, y: by, w: btnW, h: btnH };
     }
 
-    // --- Gold breakdown tooltip ---
-    if (this._hoverGoldPill && this._goldBreakdown) {
-      const gb = this._goldBreakdown;
-      const ticksPerMin = 600;
-      const landPerMin = gb.land * ticksPerMin;
-      const farmsPerMin = gb.farms * ticksPerMin;
-      const minesPerMin = gb.mines * ticksPerMin;
-      const totalPerMin = landPerMin + farmsPerMin + minesPerMin;
+    // --- Build button tooltip ---
+    if (this._hoverBuildKey && !this.placementMode) {
+      const ttPad = 10;
+      const tooltips = {
+        city: ['+500 max troop capacity', 'Place inside your territory', 'Hotkey: 1'],
+        defense_post: ['4x attack cost for enemies in range', 'Place on your border to defend', 'Hotkey: 2'],
+      };
+      const lines = tooltips[this._hoverBuildKey] || [];
+      if (lines.length) {
+        ctx.font = '10px monospace';
+        let maxW = 0;
+        for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
+        const ttW = ttPad * 2 + maxW, ttH = ttPad * 2 + lines.length * 16;
+        const bp = this._uiPositions.buildButtons[this._hoverBuildKey];
+        const ttX = Math.max(10, Math.min(this.canvas.width - ttW - 10, bp.x + bp.w / 2 - ttW / 2));
+        const ttY = bp.y - ttH - 8;
+        ctx.fillStyle = 'rgba(31, 41, 55, 0.95)';
+        ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.stroke();
+        ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#c9d1d9';
+        for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], ttX + ttPad, ttY + ttPad + i * 16);
+      }
+    }
 
+    // --- Gold tooltip ---
+    if (this._hoverGoldPill) {
+      const ttPad = 10;
+      const cellCount = ps.cellCount || 0;
+      const landPerMin = (0.008 + cellCount * 0.00004) * 600;
       const lines = [
-        { label: 'Land', value: landPerMin, color: '#88cc88' },
-        { label: 'Farms', value: farmsPerMin, color: '#66aa44' },
-        { label: 'Mines', value: minesPerMin, color: '#aa7744' },
+        { text: `Gold income`, color: '#ffd700', bold: true },
+        { text: '', color: '' },
+        { text: `Territory: +${landPerMin.toFixed(1)}/min`, color: '#88cc88' },
+        { text: '', color: '' },
+        { text: `Spend on Cities and Forts.`, color: '#9ca3af' },
       ];
-
-      ctx.font = 'bold 10px monospace';
-      const ttPad = 10, ttLineH = 16, ttHeaderH = 18, ttDivH = 8;
-      const ttH = ttHeaderH + lines.length * ttLineH + ttDivH + ttLineH + ttPad * 2;
-      let maxLabelW = 0;
-      for (const l of lines) maxLabelW = Math.max(maxLabelW, ctx.measureText(l.label + ':').width);
-      ctx.font = '10px monospace';
-      let maxValW = 0;
-      for (const l of lines) maxValW = Math.max(maxValW, ctx.measureText(`+${l.value.toFixed(1)}/m`).width);
-      maxValW = Math.max(maxValW, ctx.measureText(`+${totalPerMin.toFixed(1)}/m`).width);
-      const ttW = ttPad * 2 + maxLabelW + 12 + maxValW;
-
+      ctx.font = 'bold 11px sans-serif';
+      let maxW = 0;
+      for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l.text).width);
+      const ttW = ttPad * 2 + maxW, ttH = ttPad * 2 + lines.length * 15;
       const gp = this._goldPillRect;
-      const ttX = gp.x + gp.w / 2 - ttW / 2;
+      let ttX = gp.x + gp.w / 2 - ttW / 2;
+      ttX = Math.max(10, Math.min(this.canvas.width - ttW - 10, ttX));
       const ttY = gp.y - ttH - 8;
-
       ctx.fillStyle = 'rgba(31, 41, 55, 0.95)';
       ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.fill();
       ctx.strokeStyle = 'rgba(255,215,0,0.3)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.stroke();
-
-      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 10px monospace';
-      ctx.fillText('Revenue', ttX + ttW / 2, ttY + ttPad);
-
-      let curY = ttY + ttPad + ttHeaderH;
-      for (const l of lines) {
-        ctx.textAlign = 'left'; ctx.fillStyle = l.color; ctx.font = '10px monospace';
-        ctx.fillText(l.label + ':', ttX + ttPad, curY);
-        ctx.textAlign = 'right'; ctx.fillStyle = '#e6edf3';
-        ctx.fillText(`+${l.value.toFixed(1)}/m`, ttX + ttW - ttPad, curY);
-        curY += ttLineH;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].text) continue;
+        ctx.font = lines[i].bold ? 'bold 11px sans-serif' : '11px sans-serif';
+        ctx.fillStyle = lines[i].color;
+        ctx.fillText(lines[i].text, ttX + ttPad, ttY + ttPad + i * 15);
       }
+    }
 
+    // --- Troop bar tooltip ---
+    if (this._hoverTroopBar) {
+      const ttPad = 10;
+      const cellCount = ps.cellCount || 0;
+      const cityCount = ps.cityCount || 0;
+      const landCap = Math.floor(Math.pow(cellCount, 0.6) * 12 + 150);
+      const cityCap = cityCount * 500;
+      const lines = [
+        { text: `Land cap: ${formatTroops(landCap)}`, color: '#88cc88' },
+        { text: `Cities (×${cityCount}): +${formatTroops(cityCap)}`, color: '#ffd700' },
+        { text: '', color: '' },
+        { text: `Troops/sec: +${Math.max(0, this._troopRate).toFixed(0)}`, color: '#e6edf3' },
+        { text: '', color: '' },
+        { text: 'Red: low troops, fast regen', color: '#cc4444' },
+        { text: 'Green: optimal troop gain', color: '#44bb44' },
+        { text: 'Yellow: near cap, diminishing', color: '#ccaa22' },
+      ];
+      ctx.font = 'bold 11px sans-serif';
+      let maxW = 0;
+      for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l.text).width);
+      const ttW = ttPad * 2 + maxW, ttH = ttPad * 2 + lines.length * 15;
+      const tb = this._troopBarRect;
+      let ttX = tb.x + tb.w / 2 - ttW / 2;
+      ttX = Math.max(10, Math.min(this.canvas.width - ttW - 10, ttX));
+      const ttY = tb.y - ttH - 8;
+      ctx.fillStyle = 'rgba(31, 41, 55, 0.95)';
+      ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(ttX + ttPad, curY + 2); ctx.lineTo(ttX + ttW - ttPad, curY + 2); ctx.stroke();
-      curY += ttDivH;
+      ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.stroke();
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].text) continue;
+        ctx.fillStyle = lines[i].color;
+        ctx.fillText(lines[i].text, ttX + ttPad, ttY + ttPad + i * 15);
+      }
+    }
 
-      ctx.textAlign = 'left'; ctx.fillStyle = '#ffd700'; ctx.font = 'bold 10px monospace';
-      ctx.fillText('Total:', ttX + ttPad, curY);
-      ctx.textAlign = 'right'; ctx.fillStyle = '#ffd700';
-      ctx.fillText(`+${totalPerMin.toFixed(1)}/m`, ttX + ttW - ttPad, curY);
+    // --- Outbound tooltip ---
+    if (this._hoverOutbound) {
+      const ttPad = 10;
+      const lines = [];
+      for (const a of (ps.attacks || [])) {
+        if (a.troops < 1) continue;
+        const tName = a.target === -1 ? 'Wilderness' : (PLAYER_NAMES[a.target] || 'Unknown');
+        lines.push(`${tName}: ${formatTroops(Math.floor(a.troops))}`);
+      }
+      for (const bh of (ps.beachheads || [])) {
+        const tName = bh.target === -1 ? 'Wilderness' : (PLAYER_NAMES[bh.target] || 'Unknown');
+        lines.push(`${tName} (beachhead): ${formatTroops(Math.floor(bh.troops))}`);
+      }
+      if (lines.length === 0) lines.push('No active attacks');
+      ctx.font = 'bold 11px sans-serif';
+      let maxW = ctx.measureText('Outbound Troops').width;
+      for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
+      const ttW = ttPad * 2 + maxW;
+      const ttH = ttPad * 2 + 16 + lines.length * 15;
+      const ob = this._outboundPillRect;
+      // Center horizontally on the pill
+      let ttX = ob.x + ob.w / 2 - ttW / 2;
+      ttX = Math.max(10, Math.min(this.canvas.width - ttW - 10, ttX));
+      const ttY = ob.y - ttH - 6;
+      ctx.fillStyle = 'rgba(31,41,55,0.96)';
+      ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,102,68,0.4)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.stroke();
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillStyle = '#ff8866'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('Outbound Troops', ttX + ttPad, ttY + ttPad);
+      ctx.fillStyle = '#c9d1d9'; ctx.font = '11px sans-serif';
+      for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], ttX + ttPad, ttY + ttPad + 16 + i * 15);
+    }
+
+    // --- Territory bar tooltip ---
+    if (this._hoverTerritoryBar) {
+      const ttPad = 10;
+      const lines = [
+        'Your territory as % of the total map.',
+        'Reach 80% to claim victory!',
+      ];
+      ctx.font = '10px monospace';
+      let maxW = 0;
+      for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
+      const ttW = ttPad * 2 + maxW, ttH = ttPad * 2 + lines.length * 16;
+      const terr = this._territoryBarRect;
+      const ttX = Math.min(terr.x + terr.w / 2 - ttW / 2, this.canvas.width - ttW - 10);
+      const ttY = terr.y - ttH - 8;
+      ctx.fillStyle = 'rgba(31, 41, 55, 0.95)';
+      ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(68,136,255,0.3)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(ttX, ttY, ttW, ttH, 8); ctx.stroke();
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#c9d1d9';
+      for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], ttX + ttPad, ttY + ttPad + i * 16);
     }
 
     // --- Leaderboard (top-left) ---
@@ -1216,25 +1450,90 @@ class GameRenderer {
     const lbX = 10, lbY = 10;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
 
+    if (!this._lbScroll) this._lbScroll = 0;
     if (this._leaderboardOpen) {
-      const lbW = 200, lbRowH = 18, lbH = 24 + Math.min(lb.length, 8) * lbRowH;
-      ctx.fillStyle = 'rgba(31,41,55,0.88)'; ctx.beginPath(); ctx.roundRect(lbX, lbY, lbW, lbH, 8); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(lbX, lbY, lbW, lbH, 8); ctx.stroke();
-      ctx.fillStyle = '#e6edf3'; ctx.font = 'bold 11px monospace';
-      ctx.fillText('Leaderboard  [▲]', lbX + 8, lbY + 6);
-      for (let i = 0; i < Math.min(lb.length, 8); i++) {
-        const p = lb[i], y = lbY + 24 + i * lbRowH;
-        ctx.fillStyle = PLAYER_COLORS[p.id]; ctx.fillRect(lbX + 8, y + 3, 8, 8);
-        ctx.fillStyle = p.id === 0 ? '#e6edf3' : '#8b949e'; ctx.font = `${p.id === 0 ? 'bold ' : ''}10px monospace`;
-        ctx.fillText(`${p.name}: ${p.cellCount}`, lbX + 20, y + 2);
-        ctx.fillStyle = '#8b949e'; ctx.font = '9px monospace';
-        const tStr = formatTroops(p.troops);
-        ctx.fillText(tStr, lbX + lbW - 10 - ctx.measureText(tStr).width, y + 2);
+      const lbW = 320, lbRowH = 22, maxVisible = 10;
+      const visCount = Math.min(lb.length, maxVisible);
+      const headerH = 18;
+      const listH = visCount * lbRowH;
+      const playerRank = lb.findIndex(p => p.id === 0);
+      const colNameX = lbX + 28;
+      const colOwnedX = lbX + lbW - 130;
+      const colMaxX = lbX + lbW - 16;
+
+      const scrollMax = Math.max(0, lb.length - maxVisible);
+      this._lbScroll = Math.max(0, Math.min(scrollMax, this._lbScroll));
+      const dataStartY = lbY + 28 + headerH;
+      const playerVisible = playerRank >= 0 && playerRank >= this._lbScroll && playerRank < this._lbScroll + visCount;
+      const stickyH = (playerRank >= 0 && !playerVisible) ? lbRowH + 4 : 0;
+      const lbH = 28 + headerH + listH + 4 + stickyH;
+
+      ctx.fillStyle = 'rgba(31,41,55,0.92)'; ctx.beginPath(); ctx.roundRect(lbX, lbY, lbW, lbH, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(lbX, lbY, lbW, lbH, 8); ctx.stroke();
+      ctx.fillStyle = '#e6edf3'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText('Leaderboard  [▲]', lbX + 8, lbY + 8);
+
+      // Column headers
+      const headY = lbY + 26;
+      ctx.fillStyle = '#9ca3af'; ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'left'; ctx.fillText('Player', colNameX, headY);
+      ctx.textAlign = 'right';
+      ctx.fillText('Owned %', colOwnedX, headY);
+      ctx.fillText('Max Troops', colMaxX, headY);
+      ctx.textAlign = 'left';
+
+      const drawRow = (p, rankIdx, y, highlight) => {
+        if (highlight) {
+          ctx.fillStyle = 'rgba(68,136,255,0.18)';
+          ctx.beginPath(); ctx.roundRect(lbX + 4, y, lbW - 8, lbRowH - 1, 4); ctx.fill();
+          ctx.strokeStyle = '#4488ff'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.roundRect(lbX + 4, y, lbW - 8, lbRowH - 1, 4); ctx.stroke();
+        }
+        ctx.textAlign = 'left';
+        ctx.fillStyle = highlight ? '#bcd3ff' : '#6b7280'; ctx.font = 'bold 11px sans-serif';
+        ctx.fillText(`${rankIdx + 1}.`, lbX + 8, y + 4);
+        ctx.fillStyle = PLAYER_COLORS[p.id]; ctx.fillRect(colNameX, y + 5, 10, 10);
+        ctx.fillStyle = highlight ? '#ffffff' : (p.id === 0 ? '#ffffff' : '#d0d7de'); ctx.font = `bold 12px sans-serif`;
+        ctx.fillText(p.name, colNameX + 16, y + 4);
+        const pct = this.totalLandTiles > 0 ? Math.round(p.cellCount / this.totalLandTiles * 100) : 0;
+        ctx.fillStyle = highlight ? '#ffffff' : '#c9d1d9'; ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${pct}%`, colOwnedX, y + 5);
+        const maxT = maxTroopsForTiles(p.cellCount, p.cityCount || 0);
+        ctx.fillStyle = highlight ? '#ffffff' : '#9ca3af';
+        ctx.fillText(formatTroops(maxT), colMaxX, y + 5);
+        ctx.textAlign = 'left';
+      };
+
+      for (let i = 0; i < visCount; i++) {
+        const pi = i + this._lbScroll;
+        if (pi >= lb.length) break;
+        const p = lb[pi], y = dataStartY + i * lbRowH;
+        drawRow(p, pi, y, p.id === 0);
+      }
+
+      // Sticky player row at bottom if off-screen
+      if (stickyH > 0) {
+        const stickyY = dataStartY + listH + 4;
+        // separator
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(lbX + 8, stickyY - 2); ctx.lineTo(lbX + lbW - 8, stickyY - 2); ctx.stroke();
+        drawRow(lb[playerRank], playerRank, stickyY, true);
+      }
+      // Scrollbar
+      if (lb.length > maxVisible) {
+        const sbX = lbX + lbW - 8, sbY = dataStartY, sbH = listH;
+        const thumbH = Math.max(20, sbH * (maxVisible / lb.length));
+        const thumbY = sbY + (sbH - thumbH) * (this._lbScroll / scrollMax);
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.beginPath(); ctx.roundRect(sbX, sbY, 4, sbH, 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.beginPath(); ctx.roundRect(sbX, thumbY, 4, thumbH, 2); ctx.fill();
       }
     } else {
-      ctx.fillStyle = 'rgba(31,41,55,0.88)'; ctx.beginPath(); ctx.roundRect(lbX, lbY, 140, 22, 6); ctx.fill();
-      ctx.fillStyle = '#8b949e'; ctx.font = '10px monospace';
-      ctx.fillText('Leaderboard [▼]', lbX + 8, lbY + 6);
+      ctx.fillStyle = 'rgba(31,41,55,0.88)'; ctx.beginPath(); ctx.roundRect(lbX, lbY, 160, 24, 6); ctx.fill();
+      ctx.fillStyle = '#9ca3af'; ctx.font = 'bold 12px sans-serif';
+      ctx.fillText('Leaderboard [▼]', lbX + 8, lbY + 7);
     }
 
     // --- Help button (top-right) ---
@@ -1253,7 +1552,7 @@ class GameRenderer {
       const lines = [
         'Click: expand/attack', CONFIG.BOATS_ENABLED ? 'Right-click: boat / cancel' : 'Right-click: cancel',
         'WASD: pan camera', 'Scroll: zoom',
-        '1-6: select building', 'Tab: toggle leaderboard',
+        '1-2: select building', 'Tab: toggle leaderboard',
         'Esc: cancel placement',
         '■ Plains  ■ Highland  ■ Mountain'
       ];
@@ -1265,7 +1564,7 @@ class GameRenderer {
       const boatCount = (this.boats || []).filter(b => b.owner === 0).length;
       if (boatCount > 0) {
         ctx.fillStyle = '#4488ff'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
-        ctx.fillText(`Boats: ${boatCount}/3`, this.canvas.width / 2, this.placementMode ? 44 : 28);
+        ctx.fillText(`Boats: ${boatCount}/3`, this.canvas.width / 2, this.placementMode ? 58 : 44);
       }
     }
 
@@ -1283,12 +1582,30 @@ class GameRenderer {
 
     // --- Game over ---
     if (this.gameOver) {
-      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 48px sans-serif';
-      ctx.fillStyle = this.winner === 0 ? '#44ff44' : '#ff4444';
-      ctx.fillText(this.winner === 0 ? 'VICTORY!' : 'DEFEATED', this.canvas.width / 2, this.canvas.height / 2 - 20);
-      ctx.font = '18px sans-serif'; ctx.fillStyle = '#fff';
-      ctx.fillText('Refresh to play again', this.canvas.width / 2, this.canvas.height / 2 + 30);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+      if (this.winner === 0) {
+        ctx.font = 'bold 56px sans-serif'; ctx.fillStyle = '#44ff44';
+        ctx.fillText('VICTORY!', this.canvas.width / 2, this.canvas.height / 2 - 50);
+        const pct = this.playerData[0] ? Math.round(this.playerData[0].cellCount / Math.max(1, this.totalLandTiles) * 100) : 0;
+        ctx.font = '20px sans-serif'; ctx.fillStyle = '#ccc';
+        ctx.fillText(`You conquered ${pct}% of the map`, this.canvas.width / 2, this.canvas.height / 2);
+      } else {
+        ctx.font = 'bold 56px sans-serif'; ctx.fillStyle = '#ff4444';
+        ctx.fillText('DEFEATED', this.canvas.width / 2, this.canvas.height / 2 - 50);
+        ctx.font = '20px sans-serif'; ctx.fillStyle = '#ccc';
+        ctx.fillText('Your territory was conquered', this.canvas.width / 2, this.canvas.height / 2);
+      }
+
+      // Play Again button
+      const btnW2 = 200, btnH2 = 50;
+      const btnX2 = (this.canvas.width - btnW2) / 2, btnY2 = this.canvas.height / 2 + 40;
+      this._restartBtn = { x: btnX2, y: btnY2, w: btnW2, h: btnH2 };
+      ctx.fillStyle = '#4488ff';
+      ctx.beginPath(); ctx.roundRect(btnX2, btnY2, btnW2, btnH2, 10); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('Play Again', this.canvas.width / 2, btnY2 + btnH2 / 2);
     }
 
     if (this._tutorialActive) this.renderTutorial();
@@ -1330,13 +1647,11 @@ class GameRenderer {
         const bar = this._getBottomBarLayout();
         highlightRect = { x: bar.x + 10, y: bar.y + 38, w: bar.w - 20, h: 14 };
       } else if (step.highlight === 'build_btn_city') {
-        const bar = this._getBottomBarLayout();
-        const btnW = (bar.w - 20) / BUILD_ITEMS.length;
-        highlightRect = { x: bar.x + 10, y: bar.y + 58, w: btnW - 4, h: 42 };
+        const bp = this._uiPositions.buildButtons && this._uiPositions.buildButtons['city'];
+        if (bp) highlightRect = { x: bp.x, y: bp.y, w: bp.w, h: bp.h };
       } else if (step.highlight === 'build_btn_dpost') {
-        const bar = this._getBottomBarLayout();
-        const btnW = (bar.w - 20) / BUILD_ITEMS.length;
-        highlightRect = { x: bar.x + 10 + btnW, y: bar.y + 58, w: btnW - 4, h: 42 };
+        const bp = this._uiPositions.buildButtons && this._uiPositions.buildButtons['defense_post'];
+        if (bp) highlightRect = { x: bp.x, y: bp.y, w: bp.w, h: bp.h };
       }
     }
 
@@ -1511,6 +1826,72 @@ class GameRenderer {
       this._tutorialActive = false;
     }
   }
+
+  _initCloudIntro() {
+    this._cloudIntro = { start: performance.now(), duration: 3000, puffs: [] };
+    const cw = this.canvas.width, ch = this.canvas.height;
+    const cx = cw / 2, cy = ch / 2;
+    // Grid of clouds covering the entire screen, then drift outward
+    const cols = 8, rows = 6;
+    const idx = [];
+    for (let gy = 0; gy < rows; gy++) for (let gx = 0; gx < cols; gx++) idx.push([gx, gy]);
+    // Add extra random puffs for density
+    for (let i = 0; i < 40; i++) idx.push([Math.random() * cols, Math.random() * rows]);
+    for (let i = 0; i < idx.length; i++) {
+      const [gx, gy] = idx[i];
+      const px = (gx + 0.5) / cols * cw + (Math.random() - 0.5) * (cw / cols) * 0.6;
+      const py = (gy + 0.5) / rows * ch + (Math.random() - 0.5) * (ch / rows) * 0.6;
+      const outAngle = Math.atan2(py - cy, px - cx);
+      const edgeDist = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2) / Math.max(cw, ch);
+      this._cloudIntro.puffs.push({
+        x: px, y: py,
+        r: 120 + Math.random() * 160,
+        vx: Math.cos(outAngle) * (60 + edgeDist * 200 + Math.random() * 100),
+        vy: Math.sin(outAngle) * (60 + edgeDist * 200 + Math.random() * 100),
+        opacity: 0.7 + Math.random() * 0.3,
+        layer: Math.random(),
+        sub: [],
+      });
+      const p = this._cloudIntro.puffs[i];
+      const numSub = 6 + Math.floor(Math.random() * 6);
+      for (let j = 0; j < numSub; j++) {
+        const sa = Math.random() * Math.PI * 2;
+        const sd = Math.random() * p.r * 0.7;
+        p.sub.push({ ox: Math.cos(sa) * sd, oy: Math.sin(sa) * sd, r: p.r * (0.35 + Math.random() * 0.45) });
+      }
+    }
+  }
+
+  renderCloudIntro() {
+    const ci = this._cloudIntro;
+    if (!ci) return false;
+    const t = (performance.now() - ci.start) / ci.duration;
+    if (t >= 1) { this._cloudIntro = null; return false; }
+
+    const ctx = this.ctx;
+    const fadeStart = 0.15;
+    const globalFade = t < fadeStart ? 1 : 1 - Math.pow((t - fadeStart) / (1 - fadeStart), 0.8);
+    const drift = Math.pow(t, 1.5);
+
+    for (const p of ci.puffs) {
+      const px = p.x + p.vx * drift * 2.5;
+      const py = p.y + p.vy * drift * 2.5;
+      const layerFade = Math.max(0, globalFade - p.layer * 0.2);
+      if (layerFade <= 0) continue;
+      const alpha = p.opacity * layerFade;
+
+      for (const s of p.sub) {
+        const sx = px + s.ox * (1 + drift * 0.5), sy = py + s.oy * (1 + drift * 0.5);
+        const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, s.r * (1 + drift * 0.3));
+        grad.addColorStop(0, `rgba(225,230,240,${alpha * 0.7})`);
+        grad.addColorStop(0.4, `rgba(205,215,230,${alpha * 0.4})`);
+        grad.addColorStop(1, `rgba(185,200,220,0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(sx - s.r * 1.5, sy - s.r * 1.5, s.r * 3, s.r * 3);
+      }
+    }
+    return true;
+  }
 }
 
 // --- Landing page ---
@@ -1521,14 +1902,14 @@ window.addEventListener('load', () => {
   const playBtn = document.getElementById('play-btn');
 
   // Start background spectate game
-  const bgRenderer = new GameRenderer(canvas, 'india_small', null);
+  const bgRenderer = new GameRenderer(canvas, 'usa', null);
   bgRenderer.render();
 
   function startGame() {
     const name = nameInput.value.trim() || 'Player';
     bgRenderer.destroy();
     overlay.classList.add('hidden');
-    const renderer = new GameRenderer(canvas, 'india_small', name);
+    const renderer = new GameRenderer(canvas, 'usa', name);
     renderer.render();
   }
 
@@ -1536,7 +1917,7 @@ window.addEventListener('load', () => {
     const name = nameInput.value.trim() || 'Player';
     bgRenderer.destroy();
     overlay.classList.add('hidden');
-    const renderer = new GameRenderer(canvas, 'india_small', name);
+    const renderer = new GameRenderer(canvas, 'usa', name);
     renderer._tutorialActive = true;
     renderer._initTutorial();
     renderer.render();

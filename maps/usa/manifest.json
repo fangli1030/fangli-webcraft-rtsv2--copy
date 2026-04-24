@@ -1,0 +1,176 @@
+{
+  "width": 1440,
+  "height": 810,
+  "num_land_tiles": 844940,
+  "nations": [
+    {
+      "coordinates": [
+        157,
+        199
+      ],
+      "name": "Washington",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        180,
+        425
+      ],
+      "name": "California",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        477,
+        273
+      ],
+      "name": "Montana",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        591,
+        422
+      ],
+      "name": "Colorado",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        729,
+        617
+      ],
+      "name": "Texas",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        890,
+        232
+      ],
+      "name": "Minnesota",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        929,
+        354
+      ],
+      "name": "Illinois",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        1080,
+        544
+      ],
+      "name": "Georgia",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        1318,
+        325
+      ],
+      "name": "New York",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        512,
+        789
+      ],
+      "name": "Mexico",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        132,
+        273
+      ],
+      "name": "Oregon",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        332,
+        281
+      ],
+      "name": "Idaho",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        379,
+        492
+      ],
+      "name": "Arizona",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        736,
+        436
+      ],
+      "name": "Kansas",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        1140,
+        352
+      ],
+      "name": "Ohio",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        1205,
+        391
+      ],
+      "name": "Virginia",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        1390,
+        247
+      ],
+      "name": "Maine",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        737,
+        321
+      ],
+      "name": "Nebraska",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        290,
+        407
+      ],
+      "name": "Nevada",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        1031,
+        665
+      ],
+      "name": "Florida",
+      "flag": "us"
+    },
+    {
+      "coordinates": [
+        715,
+        502
+      ],
+      "name": "Oklahoma",
+      "flag": "us"
+    }
+  ],
+  "name": "USA"
+}

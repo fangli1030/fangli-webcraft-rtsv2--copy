@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Three figures grouped (representing army) -->
+  <!-- Back figure -->
+  <circle cx="16" cy="6" r="3" fill="#8b949e"/>
+  <path d="M11 11 L21 11 L19 18 L13 18 Z" fill="#8b949e"/>
+  <!-- Left figure -->
+  <circle cx="8" cy="10" r="3.5" fill="#c9d1d9" stroke="#6b7280" stroke-width="1"/>
+  <path d="M3 16 L13 16 L11 28 L5 28 Z" fill="#4488ff" stroke="#3366cc" stroke-width="1"/>
+  <!-- Right figure -->
+  <circle cx="24" cy="10" r="3.5" fill="#c9d1d9" stroke="#6b7280" stroke-width="1"/>
+  <path d="M19 16 L29 16 L27 28 L21 28 Z" fill="#4488ff" stroke="#3366cc" stroke-width="1"/>
+  <!-- Spear top -->
+  <line x1="2" y1="2" x2="6" y2="14" stroke="#8b6914" stroke-width="1.5"/>
+  <polygon points="2,2 4,1 5,4" fill="#c9d1d9"/>
+</svg>

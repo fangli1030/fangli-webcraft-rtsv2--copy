@@ -1,31 +1,36 @@
 [site]
-name = "rts"
-url = ""
-description = "A minimal website displaying rts"
+name = "Meta RTS"
+url = "https://anujvarma-webcraft-rts-claude.vercel.app"
+description = "Real-time strategy territory game where you conquer 80% of the United States to win"
 category = "high-end"
 
 [site.tech]
-stack = ["HTML", "CSS"]
-hosting = ""
-hosting_access_granted = false
+stack = ["HTML", "CSS", "JavaScript", "Canvas 2D", "Web Workers"]
+hosting = "Vercel"
+hosting_access_granted = true
 
 [site.assets]
-images = []                                   # e.g. ["public/assets/hero.png"]
-videos = []                                   # e.g. ["public/assets/intro.mp4"]
-models_3d = []                                # e.g. ["public/assets/globe.glb"]
-svgs = []                                     # e.g. ["public/assets/logo.svg"]
+images = []
+videos = []
+models_3d = []
+svgs = ["icons/city.svg", "icons/defense_post.svg", "icons/gold.svg", "icons/troop.svg"]
 
 [site.prd]
 file = "PRD.md"
-setup = "open index.html"
-backend = "None — static HTML"
+setup = "npx serve -l 3000"
+backend = "None — fully client-side, simulation runs in a Web Worker"
 
 [[screenshots]]
 route = "/"
 file = "screenshots/home-desktop.png"
-device = "desktop"                            # desktop (1440x900) or mobile (390x844)
+device = "desktop"
 
 [[screenshots]]
 route = "/"
 file = "screenshots/home-mobile.png"
 device = "mobile"
+
+[[screenshots]]
+route = "/"
+file = "screenshots/gameplay-desktop.png"
+device = "desktop"

@@ -1,57 +1,58 @@
-# Setup & Deployment Instructions
-
-<!-- Fill in each section so a reviewer can run your site locally in under 5 minutes. -->
+# Setup & Deployment
 
 ## Prerequisites
 
-<!-- What needs to be installed before setup? -->
-
-- Node.js >= 18
-- npm / pnpm / yarn
-
-## Environment Variables
-
-<!-- List every required env var. Copy .env.example to .env and fill in values. -->
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Description | How to get it |
-|----------|-------------|---------------|
-| `EXAMPLE_API_KEY` | API key for ... | Sign up at ... |
+- Node.js >= 14 (only used to run a static file server — no compile step)
+- A modern browser (Chrome, Safari, Firefox)
 
 ## Local Development
 
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-```
-
-The site will be available at `http://localhost:3000`.
-
-## Production Build
+This is a fully static site with no build step. Serve the directory with any static file server:
 
 ```bash
-npm run build
-npm start
+npx serve -l 3000
 ```
+
+Then open `http://localhost:3000` in your browser. The game starts immediately.
+
+That's it — no `npm install`, no env vars, no backend.
+
+## Project Structure
+
+```
+.
+├── index.html          # Entry point — minimal HTML shell
+├── style.css           # Landing overlay styles only (in-game UI is canvas-rendered)
+├── game.js             # Main thread: rendering, input, HUD, animations
+├── game-worker.js      # Web Worker: game simulation, bot AI, expansion logic
+├── icons/              # SVG iconography (city, defense_post, gold, troop)
+├── maps/usa/           # USA map binary + manifest with nation spawn points
+│   ├── map.bin         # 1 byte/tile terrain data (1440x810 = 1.16 MB)
+│   └── manifest.json   # Map dimensions, land tile count, nation spawn coords
+├── tools/              # Offline map generation scripts (Python)
+└── vercel.json         # Vercel static deployment config
+```
+
+## Environment Variables
+
+None. The game runs entirely client-side with no API keys, accounts, or external services.
 
 ## Deployment
 
-<!-- How to deploy to your hosting provider. -->
-
-Example for Vercel:
+Deployed to Vercel as a static site:
 
 ```bash
-npx vercel --prod
+vercel --prod --yes
 ```
+
+Live URL: https://anujvarma-webcraft-rts-claude.vercel.app
 
 ## External Services
 
-<!-- List any APIs, databases, or third-party services the site depends on. -->
+None.
 
-- None (or list them here)
+## Browser Compatibility
+
+- Tested on Chrome and Safari (desktop)
+- Touch support: pan/tap and pinch-to-zoom on mobile
+- Requires Canvas 2D and Web Workers (universally supported in modern browsers)

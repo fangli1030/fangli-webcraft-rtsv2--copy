@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Helmet (Roman/Spartan style) -->
+  <path d="M8 18 Q8 10, 16 8 Q24 10, 24 18 L24 22 L8 22 Z" fill="#c9d1d9" stroke="#6b7280" stroke-width="1.5"/>
+  <!-- Crest plume -->
+  <path d="M14 8 Q14 4, 16 3 Q18 4, 18 8 L18 12 L14 12 Z" fill="#cc4444" stroke="#8b1a1a" stroke-width="1"/>
+  <!-- Eye slit / face guard -->
+  <path d="M11 16 L21 16 L21 22 L11 22 Z" fill="#1a1a2e" opacity="0.6"/>
+  <line x1="11" y1="18" x2="21" y2="18" stroke="#c9d1d9" stroke-width="1.5"/>
+  <line x1="16" y1="16" x2="16" y2="22" stroke="#c9d1d9" stroke-width="1.5"/>
+  <!-- Chin strap -->
+  <path d="M8 22 L8 26 L24 26 L24 22" fill="#8b949e" stroke="#6b7280" stroke-width="1"/>
+</svg>

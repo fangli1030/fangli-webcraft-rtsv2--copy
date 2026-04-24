@@ -1,10 +1,10 @@
 // game-worker.js — All game logic runs in this Web Worker thread
 
 const T_WATER = 0, T_PLAINS = 1, T_HIGHLAND = 2, T_MOUNTAIN = 3;
-const WILD_COST = [0, 0.4, 0.7, 1.2];
-const ENEMY_BASE_COST = [0, 1.2, 2.0, 3.5];
-const CITY_COST = 100;
-const CITY_TROOP_BONUS = 100;
+const WILD_COST = [0, 0.05, 0.1, 0.2];
+const ENEMY_BASE_COST = [0, 0.6, 1.0, 1.8];
+const CITY_COST = 50;
+const CITY_TROOP_BONUS = 500;
 const CITY_MIN_DIST = 15;
 const DPOST_RANGE = 20;
 const DPOST_DEFENSE_MULT = 4;
@@ -24,6 +24,8 @@ const FACTORY_STACK_PENALTY = 0.4;
 const BOT_STRATEGIES = [
   null, 'aggressive', 'aggressive', 'aggressive', 'aggressive',
   'defensive', 'defensive', 'defensive', 'balanced', 'balanced', 'balanced',
+  'aggressive', 'aggressive', 'defensive', 'defensive', 'balanced',
+  'balanced', 'aggressive', 'defensive', 'balanced', 'aggressive',
 ];
 const MAX_BOATS = 3;
 const BOAT_TROOP_FRACTION = 0.2;
@@ -33,6 +35,8 @@ let GRID_W, GRID_H, NUM_BOTS, CELLS_PER_TICK, EXPANSION_TICK_MS, BOT_THINK_MS;
 let isSpectateMode = false;
 let boatsEnabled = false;
 let grid, terrain, waterMag, waterComponent, playerStates;
+let totalLandTiles = 0;
+let playerPlaced = false;
 let tileChanges = [];
 let centersSumX, centersSumY, centersN;
 let cities = [];
@@ -213,48 +217,64 @@ function conquer(newOwner, idx) {
 function processExpansions() {
   for (let i = 0; i < playerStates.length; i++) {
     const ps = playerStates[i];
-    if (!ps.alive || !ps.expanding || ps.attackTarget === null || ps.attackTroops < 1) {
-      if (ps.expanding) { ps.expanding = false; ps.attackTarget = null; ps.attackTroops = 0; }
-      continue;
-    }
-    if (ps.attackTarget !== null && ps.attackTarget >= 0 && ps.attackTarget < playerStates.length && !playerStates[ps.attackTarget].alive) {
-      ps.troops += ps.attackTroops; ps.attackTroops = 0;
-      ps.expanding = false; ps.attackTarget = null; continue;
-    }
-    const target = ps.attackTarget;
-    if (ps.borderTiles.size === 0) { ps.expanding = false; ps.attackTarget = null; ps.attackTroops = 0; continue; }
+    if (!ps.alive) { ps.attacks = []; ps.expanding = false; ps.attackTarget = null; ps.attackTroops = 0; continue; }
+    if (ps.borderTiles.size === 0) { ps.attacks = []; ps.expanding = false; ps.attackTarget = null; ps.attackTroops = 0; continue; }
 
-    let captured = 0;
-    let capturebudget = CELLS_PER_TICK;
-    const skip = (Math.random() * ps.borderTiles.size) | 0;
-    let sc = 0;
-    for (const fIdx of ps.borderTiles) {
-      if (captured >= capturebudget || ps.attackTroops < 1) break;
-      if (sc++ < skip) continue;
-      const fx = fIdx % GRID_W, fy = (fIdx / GRID_W) | 0;
-      const r = (Math.random() * 4) | 0;
-      const ox = [[-1,0],[1,0],[0,-1],[0,1]];
-      for (let d = 0; d < 4; d++) {
-        const [dx, dy] = ox[(r + d) & 3];
-        const nx = fx + dx, ny = fy + dy;
-        if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
-        const nIdx = ny * GRID_W + nx;
-        if (grid[nIdx] !== target || terrain[nIdx] === 0) continue;
-        const ter = terrain[nIdx];
-        let cost;
-        if (target === -1) { cost = isSpectateMode ? WILD_COST[ter] * 0.1 : WILD_COST[ter]; }
-        else {
-          const defPs = playerStates[target];
-          const ratio = Math.min(2, Math.max(0.6, defPs.troops / Math.max(1, ps.troops + ps.attackTroops)));
-          cost = ENEMY_BASE_COST[ter] * ratio;
-          if (isTileDefended(nIdx, target)) { cost *= DPOST_DEFENSE_MULT; capturebudget -= (DPOST_SPEED_PENALTY - 1); }
-          if (defPs.cellCount > 0) defPs.troops = Math.max(0, defPs.troops - defPs.troops / defPs.cellCount);
-        }
-        if (ps.attackTroops >= cost) { ps.attackTroops -= cost; conquer(i, nIdx); captured++; }
-        break;
+    for (let ai = ps.attacks.length - 1; ai >= 0; ai--) {
+      const atk = ps.attacks[ai];
+      if (atk.troops < 1) { ps.attacks.splice(ai, 1); continue; }
+      // If target died, return troops to player
+      if (atk.target >= 0 && atk.target < playerStates.length && !playerStates[atk.target].alive) {
+        ps.troops += atk.troops; ps.attacks.splice(ai, 1); continue;
       }
+
+      const target = atk.target;
+      let captured = 0;
+      let capturebudget = target === -1 ? CELLS_PER_TICK * 3 : CELLS_PER_TICK;
+      // Each attack gets a slice of the budget proportional to attack count
+      capturebudget = Math.max(1, Math.floor(capturebudget / Math.max(1, ps.attacks.length)));
+
+      const skip = (Math.random() * ps.borderTiles.size) | 0;
+      let sc = 0;
+      for (const fIdx of ps.borderTiles) {
+        if (captured >= capturebudget || atk.troops < 1) break;
+        if (sc++ < skip) continue;
+        const fx = fIdx % GRID_W, fy = (fIdx / GRID_W) | 0;
+        const r = (Math.random() * 4) | 0;
+        const ox = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (let d = 0; d < 4; d++) {
+          const [dx, dy] = ox[(r + d) & 3];
+          const nx = fx + dx, ny = fy + dy;
+          if (nx < 0 || nx >= GRID_W || ny < 0 || ny >= GRID_H) continue;
+          const nIdx = ny * GRID_W + nx;
+          if (grid[nIdx] !== target || terrain[nIdx] === 0) continue;
+          const ter = terrain[nIdx];
+          let cost;
+          if (target === -1) { cost = isSpectateMode ? WILD_COST[ter] * 0.1 : WILD_COST[ter]; }
+          else {
+            const defPs = playerStates[target];
+            const ratio = Math.min(2, Math.max(0.6, defPs.troops / Math.max(1, ps.troops + atk.troops)));
+            cost = ENEMY_BASE_COST[ter] * ratio;
+            if (isTileDefended(nIdx, target)) { cost *= DPOST_DEFENSE_MULT; capturebudget -= (DPOST_SPEED_PENALTY - 1); }
+            if (defPs.cellCount > 0) defPs.troops = Math.max(0, defPs.troops - defPs.troops / defPs.cellCount);
+          }
+          if (atk.troops >= cost) { atk.troops -= cost; conquer(i, nIdx); captured++; }
+          break;
+        }
+      }
+      if (atk.troops < 1) ps.attacks.splice(ai, 1);
     }
-    if (ps.attackTroops < 1) { ps.expanding = false; ps.attackTarget = null; ps.attackTroops = 0; }
+
+    // Sync legacy fields (used by bots and UI for backward compat)
+    if (ps.attacks.length > 0) {
+      ps.expanding = true;
+      ps.attackTarget = ps.attacks[0].target;
+      ps.attackTroops = ps.attacks.reduce((s, a) => s + a.troops, 0);
+    } else {
+      ps.expanding = false;
+      ps.attackTarget = null;
+      ps.attackTroops = 0;
+    }
   }
 }
 
@@ -335,11 +355,11 @@ function generateTroops(dt) {
     let max = maxTroopsForTiles(ps.cellCount, ps.cityCount);
     if (ps.isBot) max = Math.floor(max * (isSpectateMode ? 1.0 : 0.7));
     if (ps.troops >= max) { ps.troops = max; continue; }
-    let toAdd = (2 + Math.pow(Math.max(0, ps.troops), 0.65) / 6) * (1 - ps.troops / max) * ticks;
+    let toAdd = (2.5 + Math.pow(Math.max(0, ps.troops), 0.65) / 4.8) * (1 - ps.troops / max) * ticks;
     if (ps.isBot && !isSpectateMode) toAdd *= 0.8;
     if (isSpectateMode) toAdd *= 3;
     ps.troops = Math.min(ps.troops + toAdd, max);
-    let goldRate = (0.02 + ps.cellCount * 0.0001) + econ.total[i];
+    let goldRate = (0.008 + ps.cellCount * 0.00004) + econ.total[i];
     if (isSpectateMode) goldRate *= 5;
     ps.gold += goldRate * ticks;
   }
@@ -354,7 +374,9 @@ function checkElimination() {
   if (isSpectateMode) {
     if (playerStates.filter(ps => ps.alive).length <= 1) go = true;
   } else {
-    if (!playerStates[0].alive) go = true;
+    if (!playerPlaced) return { gameOver: false, winner: null };
+    if (!playerStates[0].alive && playerStates[0].cellCount <= 0) go = true;
+    else if (playerStates[0].alive && totalLandTiles > 0 && playerStates[0].cellCount / totalLandTiles >= 0.8) { go = true; w = 0; }
     else if (playerStates.filter(ps => ps.alive).length <= 1) { go = true; w = playerStates[0].alive ? 0 : null; }
   }
   return { gameOver: go, winner: w };
@@ -371,7 +393,7 @@ function canPlaceCity(idx) {
   return true;
 }
 
-function cityCost(cityCount) { return CITY_COST * Math.pow(2, cityCount); }
+function cityCost(cityCount) { return Math.min(500, CITY_COST * Math.pow(2, cityCount)); }
 
 function placeCity(owner, idx) {
   const ps = playerStates[owner];
@@ -407,7 +429,7 @@ function isTileDefended(idx, owner) {
   return false;
 }
 
-function dpostCost(count) { return Math.min(250, (count + 1) * 50); }
+function dpostCost(count) { return Math.min(150, 25 + count * 25); }
 
 function placeDefensePost(owner, idx) {
   const ps = playerStates[owner];
@@ -1073,19 +1095,13 @@ function botThinkSingle(id, borders, now) {
       const target = Math.random() < 0.4 && enemies.length > 1
         ? enemies[Math.floor(Math.random() * enemies.length)]
         : enemies[0];
-      const send = Math.max(1, Math.floor(ps.troops * 0.85));
-      ps.troops -= send; ps.attackTroops = send;
-      ps.attackTarget = target; ps.expanding = true;
+      botSetAttack(ps, target, Math.max(1, Math.floor(ps.troops * 0.85)));
       return;
     }
 
     // Expand into wilderness with everything
     if (hasWild && ps.troops > 1) {
-      const send = Math.floor(ps.troops * 0.9);
-      if (send >= 1) {
-        ps.troops -= send; ps.attackTroops = send;
-        ps.attackTarget = -1; ps.expanding = true;
-      }
+      botSetAttack(ps, -1, Math.floor(ps.troops * 0.9));
     }
     return;
   }
@@ -1095,8 +1111,7 @@ function botThinkSingle(id, borders, now) {
     const wildRatio = 0.08;
     const send = Math.floor(ps.troops * wildRatio);
     if (send >= 1) {
-      ps.troops -= send; ps.attackTroops = send;
-      ps.attackTarget = -1; ps.expanding = true;
+      botSetAttack(ps, -1, send);
       return;
     }
   }
@@ -1118,9 +1133,17 @@ function botThinkSingle(id, borders, now) {
   // 4. COMMIT — send everything above reserve
   const reserve = Math.floor(max * ps.reserveRatio);
   const send = Math.max(1, Math.floor(ps.troops - reserve));
-  ps.troops -= send; ps.attackTroops = send;
-  ps.attackTarget = target;
-  ps.expanding = true;
+  botSetAttack(ps, target, send);
+}
+
+function botSetAttack(ps, target, send) {
+  // Bots have a single attack at a time
+  for (const a of ps.attacks) ps.troops += a.troops;
+  ps.attacks = [];
+  if (send >= 1 && ps.troops >= send) {
+    ps.troops -= send;
+    ps.attacks.push({ target, troops: send });
+  }
 }
 
 let lastTime = 0, expansionTimer = 0, boatTimer = 0, gameOver = false;
@@ -1152,6 +1175,7 @@ function tick() {
     cx: centersN[i] > 0 ? centersSumX[i] / centersN[i] : 0,
     cy: centersN[i] > 0 ? centersSumY[i] / centersN[i] : 0, cn: centersN[i],
     beachheads: ps.beachheads.map(bh => ({ landingIdx: bh.landingIdx, troops: bh.troops, target: bh.target })),
+    attacks: (ps.attacks || []).map(a => ({ target: a.target, troops: a.troops })),
   }));
   const cityData = cities.map(c => ({ idx: c.idx, owner: c.owner }));
   const dpostData = defensePosts.map(d => ({ idx: d.idx, owner: d.owner }));
@@ -1186,12 +1210,15 @@ self.onmessage = function(e) {
     waterMag = new Uint8Array(msg.waterMag);
     grid = new Int8Array(msg.grid);
 
+    totalLandTiles = 0;
+    for (let i = 0; i < terrain.length; i++) if (terrain[i] > 0) totalLandTiles++;
+
     playerStates = [];
     for (let i = 0; i <= NUM_BOTS; i++)
       playerStates.push({
         troops: spectate ? msg.startingTroops * 10 : (i === 0 ? msg.startingTroops : msg.startingTroops * 0.5),
-        cellCount: 0, alive: spectate ? i > 0 : true, expanding: false, attackTarget: null,
-        borderTiles: new Set(), attackTroops: 0, gold: spectate ? 200 : (i === 0 ? 300 : 0), cityCount: 0, dpostCount: 0, beachheads: [],
+        cellCount: 0, alive: i > 0, expanding: false, attackTarget: null,
+        borderTiles: new Set(), attackTroops: 0, attacks: [], gold: spectate ? 200 : (i === 0 ? 300 : 0), cityCount: 0, dpostCount: 0, beachheads: [],
         isBot: spectate || i > 0,
         reserveRatio: spectate ? 0.02 + Math.random() * 0.03 : 0.3 + Math.random() * 0.1,
         triggerRatio: spectate ? 0.05 + Math.random() * 0.05 : 0.5 + Math.random() * 0.1,
@@ -1203,7 +1230,7 @@ self.onmessage = function(e) {
     centersN = new Int32Array(playerStates.length);
 
     const R = msg.startingRadius;
-    const startIdx = spectate ? 1 : 0;
+    const startIdx = 1;
     for (let i = startIdx; i < msg.startingPositions.length; i++) {
       const { gx: sx, gy: sy } = msg.startingPositions[i];
       for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
@@ -1268,7 +1295,7 @@ self.onmessage = function(e) {
       }
     }
 
-    self.postMessage({ type: 'init_done', fullGrid: spectate ? Array.from(grid) : null });
+    self.postMessage({ type: 'init_done', fullGrid: spectate ? Array.from(grid) : null, totalLandTiles });
     lastTime = performance.now();
     setInterval(tick, spectate ? 16 : 50);
   }
@@ -1276,18 +1303,21 @@ self.onmessage = function(e) {
     if (!terrain || terrain[msg.gy * GRID_W + msg.gx] === 0) return;
     const co = grid[msg.gy * GRID_W + msg.gx]; const ps = playerStates[0];
     if (co === 0) {
-      ps.troops += ps.attackTroops; ps.attackTroops = 0;
-      ps.expanding = false; ps.attackTarget = null;
+      // Clicking own territory: cancel all attacks, return troops
+      for (const a of ps.attacks) ps.troops += a.troops;
+      ps.attacks = [];
     } else {
       const ratio = msg.ratio || 0.2;
-      if (ps.expanding && ps.attackTarget === co) {
+      const existing = ps.attacks.find(a => a.target === co);
+      if (existing) {
         const extra = Math.floor(ps.troops * ratio);
-        ps.troops -= extra; ps.attackTroops += extra;
+        ps.troops -= extra; existing.troops += extra;
       } else {
-        ps.troops += ps.attackTroops; ps.attackTroops = 0;
         const send = Math.floor(ps.troops * ratio);
-        ps.troops -= send; ps.attackTroops = send;
-        ps.attackTarget = co; ps.expanding = true;
+        if (send >= 1) {
+          ps.troops -= send;
+          ps.attacks.push({ target: co, troops: send });
+        }
       }
     }
   }
@@ -1299,9 +1329,10 @@ self.onmessage = function(e) {
       }
       return;
     }
+    // Right-click empty: cancel all attacks
     const ps = playerStates[0];
-    ps.troops += ps.attackTroops; ps.attackTroops = 0;
-    ps.expanding = false; ps.attackTarget = null;
+    for (const a of ps.attacks) ps.troops += a.troops;
+    ps.attacks = [];
   }
   if (msg.type === 'cancel_boat' && boatsEnabled) {
     for (let i = boats.length - 1; i >= 0; i--) {
@@ -1395,6 +1426,29 @@ self.onmessage = function(e) {
   if (msg.type === 'grant_gold') {
     if (playerStates && playerStates[0]) {
       playerStates[0].gold = Math.max(playerStates[0].gold, msg.amount);
+    }
+  }
+  if (msg.type === 'place_player') {
+    const gx = msg.gx, gy = msg.gy;
+    const R = msg.radius || 10;
+    const ps = playerStates[0];
+    ps.alive = true;
+    playerPlaced = true;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      if (dx * dx + dy * dy > R * R) continue;
+      const x = gx + dx, y = gy + dy;
+      if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) continue;
+      const idx = y * GRID_W + x;
+      if (terrain[idx] === 0 || grid[idx] >= 0) continue;
+      grid[idx] = 0; ps.cellCount++;
+      centersSumX[0] += x; centersSumY[0] += y; centersN[0]++;
+      tileChanges.push(idx, 0);
+    }
+    for (let dy = -R - 1; dy <= R + 1; dy++) for (let dx = -R - 1; dx <= R + 1; dx++) {
+      const x = gx + dx, y = gy + dy;
+      if (x < 0 || x >= GRID_W || y < 0 || y >= GRID_H) continue;
+      const idx = y * GRID_W + x;
+      if (grid[idx] === 0 && calcIsBorder(idx)) ps.borderTiles.add(idx);
     }
   }
 };

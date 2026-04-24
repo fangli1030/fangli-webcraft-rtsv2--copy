@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Wall + crossed swords behind -->
+  <!-- Crossed swords (background) -->
+  <line x1="4" y1="4" x2="28" y2="28" stroke="#8b949e" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <line x1="28" y1="4" x2="4" y2="28" stroke="#8b949e" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  <!-- Fortress wall (foreground) -->
+  <rect x="6" y="14" width="20" height="14" fill="#c9d1d9" stroke="#6b7280" stroke-width="1.5"/>
+  <!-- Battlements -->
+  <rect x="6" y="11" width="3" height="4" fill="#c9d1d9" stroke="#6b7280" stroke-width="1"/>
+  <rect x="11" y="11" width="3" height="4" fill="#c9d1d9" stroke="#6b7280" stroke-width="1"/>
+  <rect x="15" y="11" width="3" height="4" fill="#c9d1d9" stroke="#6b7280" stroke-width="1"/>
+  <rect x="19" y="11" width="3" height="4" fill="#c9d1d9" stroke="#6b7280" stroke-width="1"/>
+  <rect x="23" y="11" width="3" height="4" fill="#c9d1d9" stroke="#6b7280" stroke-width="1"/>
+  <!-- Brick lines -->
+  <line x1="6" y1="20" x2="26" y2="20" stroke="#6b7280" stroke-width="0.8" opacity="0.5"/>
+  <line x1="11" y1="14" x2="11" y2="20" stroke="#6b7280" stroke-width="0.8" opacity="0.5"/>
+  <line x1="16" y1="20" x2="16" y2="28" stroke="#6b7280" stroke-width="0.8" opacity="0.5"/>
+  <line x1="21" y1="14" x2="21" y2="20" stroke="#6b7280" stroke-width="0.8" opacity="0.5"/>
+</svg>

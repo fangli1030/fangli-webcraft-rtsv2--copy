@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Sword 1: top-left to bottom-right diagonal -->
+  <!-- Blade -->
+  <line x1="6" y1="6" x2="22" y2="22" stroke="#e6edf3" stroke-width="3" stroke-linecap="round"/>
+  <!-- Tip highlight -->
+  <polygon points="22,22 25,22 22,25" fill="#ffffff"/>
+  <!-- Crossguard -->
+  <line x1="3" y1="9" x2="9" y2="3" stroke="#8b6914" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Handle -->
+  <line x1="6" y1="6" x2="2" y2="2" stroke="#8b6914" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Pommel -->
+  <circle cx="2" cy="2" r="1.8" fill="#ffd700" stroke="#b8960f" stroke-width="0.5"/>
+
+  <!-- Sword 2: top-right to bottom-left diagonal -->
+  <!-- Blade -->
+  <line x1="26" y1="6" x2="10" y2="22" stroke="#e6edf3" stroke-width="3" stroke-linecap="round"/>
+  <!-- Tip highlight -->
+  <polygon points="10,22 7,22 10,25" fill="#ffffff"/>
+  <!-- Crossguard -->
+  <line x1="29" y1="9" x2="23" y2="3" stroke="#8b6914" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Handle -->
+  <line x1="26" y1="6" x2="30" y2="2" stroke="#8b6914" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Pommel -->
+  <circle cx="30" cy="2" r="1.8" fill="#ffd700" stroke="#b8960f" stroke-width="0.5"/>
+</svg>

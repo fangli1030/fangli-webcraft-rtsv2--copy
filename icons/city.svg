@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Cluster of cabins/houses -->
+  <!-- Back-left house -->
+  <polygon points="3,16 9,11 15,16 15,24 3,24" fill="#a08868" stroke="#6b5a3e" stroke-width="1"/>
+  <polygon points="3,16 9,11 15,16" fill="#7a3a2a" stroke="#5a2a1a" stroke-width="0.8"/>
+  <rect x="7" y="19" width="3" height="5" fill="#3a2818"/>
+  <!-- Back-right house -->
+  <polygon points="17,16 23,11 29,16 29,24 17,24" fill="#b89a7a" stroke="#6b5a3e" stroke-width="1"/>
+  <polygon points="17,16 23,11 29,16" fill="#8a4a3a" stroke="#5a2a1a" stroke-width="0.8"/>
+  <rect x="20" y="18" width="2" height="3" fill="#1a1a2e"/>
+  <rect x="24" y="18" width="2" height="3" fill="#1a1a2e"/>
+  <rect x="22" y="22" width="3" height="2" fill="#3a2818"/>
+  <!-- Front-center taller house (manor) -->
+  <polygon points="10,22 16,15 22,22 22,30 10,30" fill="#c9b08a" stroke="#6b5a3e" stroke-width="1.2"/>
+  <polygon points="10,22 16,15 22,22" fill="#a04030" stroke="#5a2a1a" stroke-width="1"/>
+  <rect x="14" y="25" width="4" height="5" fill="#3a2818"/>
+  <rect x="11" y="24" width="2" height="2" fill="#1a1a2e"/>
+  <rect x="19" y="24" width="2" height="2" fill="#1a1a2e"/>
+  <!-- Chimney -->
+  <rect x="12" y="13" width="2" height="4" fill="#6b5a3e"/>
+</svg>

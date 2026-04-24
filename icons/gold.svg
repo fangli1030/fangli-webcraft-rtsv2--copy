@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Gold coin with embossed $ -->
+  <circle cx="16" cy="16" r="14" fill="#ffd700" stroke="#b8960f" stroke-width="2"/>
+  <circle cx="16" cy="16" r="11" fill="none" stroke="#b8960f" stroke-width="1" opacity="0.4"/>
+  <text x="16" y="21" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="16" fill="#8b6914">$</text>
+</svg>

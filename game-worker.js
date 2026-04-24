@@ -2,7 +2,7 @@
 
 const T_WATER = 0, T_PLAINS = 1, T_HIGHLAND = 2, T_MOUNTAIN = 3;
 const WILD_COST = [0, 0.05, 0.1, 0.2];
-const ENEMY_BASE_COST = [0, 0.6, 1.0, 1.8];
+const ENEMY_BASE_COST = [0, 0.3, 0.5, 0.9];
 const CITY_COST = 50;
 const CITY_TROOP_BONUS = 500;
 const CITY_MIN_DIST = 15;

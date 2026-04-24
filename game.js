@@ -878,9 +878,17 @@ class GameRenderer {
     }, { passive: false });
   }
 
+  _isMobile() { return this.canvas.width < 700; }
+
   _getBottomBarLayout() {
+    const mobile = this._isMobile();
+    if (mobile) {
+      // Stack vertically on mobile: bar wider, buttons below
+      const bw = this.canvas.width - 16, bh = 60;
+      return { x: 8, y: this.canvas.height - bh - 80, w: bw, h: bh, mobile: true };
+    }
     const bw = Math.min(440, this.canvas.width - 40), bh = 60;
-    return { x: (this.canvas.width - bw) / 2, y: this.canvas.height - bh - 10, w: bw, h: bh };
+    return { x: (this.canvas.width - bw) / 2, y: this.canvas.height - bh - 10, w: bw, h: bh, mobile: false };
   }
 
   render() {
@@ -1255,14 +1263,17 @@ class GameRenderer {
     ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(`${formatTroops(troops)} / ${formatTroops(max)}`, tbX + tbW / 2 + iconSz / 2, row1Y + pillH / 2);
 
-    // Build buttons (to the right of the bar)
+    // Build buttons (to the right of bar on desktop, below on mobile)
     this._uiPositions.buildButtons = {};
-    const btnW = 54, btnH = bar.h;
-    const btnStartX = bar.x + bar.w + 6;
+    const mobile = bar.mobile;
+    const btnW = mobile ? (bar.w / BUILD_ITEMS.length) - 4 : 54;
+    const btnH = mobile ? 60 : bar.h;
+    const btnStartX = mobile ? bar.x : bar.x + bar.w + 6;
+    const btnStartY = mobile ? bar.y + bar.h + 8 : bar.y;
     for (let i = 0; i < BUILD_ITEMS.length; i++) {
       const item = BUILD_ITEMS[i];
       const bx = btnStartX + i * (btnW + 4);
-      const by = bar.y;
+      const by = btnStartY;
       const cost = this.getBuildCost(item.key);
       const canAfford = gold >= cost;
       const selected = this.placementMode === item.key;
@@ -1275,19 +1286,20 @@ class GameRenderer {
 
       ctx.globalAlpha = canAfford ? 1 : 0.35;
       const btnIcon = this._icons[item.key];
+      const iconYOffset = mobile ? 6 : 4;
+      const iconSize = mobile ? 26 : 22;
       if (btnIcon && btnIcon.complete) {
-        const btnIconSz = 22;
-        ctx.drawImage(btnIcon, bx + btnW / 2 - btnIconSz / 2, by + 4, btnIconSz, btnIconSz);
+        ctx.drawImage(btnIcon, bx + btnW / 2 - iconSize / 2, by + iconYOffset, iconSize, iconSize);
       } else {
         ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         ctx.fillStyle = item.color; ctx.font = '16px sans-serif';
         ctx.fillText(item.icon, bx + btnW / 2, by + 6);
       }
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      ctx.fillStyle = '#ddd'; ctx.font = 'bold 9px sans-serif';
-      ctx.fillText(item.label, bx + btnW / 2, by + 28);
+      ctx.fillStyle = '#ddd'; ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(item.label, bx + btnW / 2, by + iconYOffset + iconSize + 4);
       ctx.fillStyle = '#ffd700'; ctx.font = '10px sans-serif';
-      ctx.fillText(`${cost}g [${item.hotkey}]`, bx + btnW / 2, by + 40);
+      ctx.fillText(`${cost}g`, bx + btnW / 2, by + iconYOffset + iconSize + 17);
       ctx.globalAlpha = 1;
 
       this._uiPositions.buildButtons[item.key] = { x: bx, y: by, w: btnW, h: btnH };

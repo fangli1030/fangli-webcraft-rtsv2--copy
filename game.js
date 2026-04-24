@@ -911,11 +911,10 @@ class GameRenderer {
   _getBottomBarLayout() {
     const mobile = this._isMobile();
     if (mobile) {
-      // Stack vertically: bar full-width, buttons below. Leave room for browser UI.
-      const bw = this.canvas.width - 16, bh = 56;
-      const buttonsH = 56;
-      const safeBottom = 30;
-      return { x: 8, y: this.canvas.height - bh - buttonsH - safeBottom - 4, w: bw, h: bh, mobile: true };
+      // Compact 2-row bar pinned above bottom safe area. Buttons floated to right side.
+      const safeBottom = 50; // for browser chrome
+      const bw = this.canvas.width - 16, bh = 80;
+      return { x: 8, y: this.canvas.height - bh - safeBottom, w: bw, h: bh, mobile: true };
     }
     const bw = Math.min(440, this.canvas.width - 40), bh = 60;
     return { x: (this.canvas.width - bw) / 2, y: this.canvas.height - bh - 10, w: bw, h: bh, mobile: false };
@@ -1304,17 +1303,26 @@ class GameRenderer {
     ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(`${formatTroops(troops)} / ${formatTroops(max)}`, tbX + tbW / 2 + iconSz / 2, row1Y + pillH / 2);
 
-    // Build buttons (to the right of bar on desktop, below on mobile)
+    // Build buttons: right side of bar (desktop) or floating right edge above bar (mobile)
     this._uiPositions.buildButtons = {};
     const mobile = bar.mobile;
-    const btnW = mobile ? (bar.w / BUILD_ITEMS.length) - 4 : 54;
+    const btnW = mobile ? 56 : 54;
     const btnH = mobile ? 56 : bar.h;
-    const btnStartX = mobile ? bar.x : bar.x + bar.w + 6;
-    const btnStartY = mobile ? bar.y + bar.h + 8 : bar.y;
+    let btnStartX, btnStartY, btnDx, btnDy;
+    if (mobile) {
+      // Vertical column on right edge, just above the bar
+      btnStartX = this.canvas.width - btnW - 8;
+      btnStartY = bar.y - (BUILD_ITEMS.length * (btnH + 4)) - 4;
+      btnDx = 0; btnDy = btnH + 4;
+    } else {
+      btnStartX = bar.x + bar.w + 6;
+      btnStartY = bar.y;
+      btnDx = btnW + 4; btnDy = 0;
+    }
     for (let i = 0; i < BUILD_ITEMS.length; i++) {
       const item = BUILD_ITEMS[i];
-      const bx = btnStartX + i * (btnW + 4);
-      const by = btnStartY;
+      const bx = btnStartX + i * btnDx;
+      const by = btnStartY + i * btnDy;
       const cost = this.getBuildCost(item.key);
       const canAfford = gold >= cost;
       const selected = this.placementMode === item.key;
@@ -1327,8 +1335,8 @@ class GameRenderer {
 
       ctx.globalAlpha = canAfford ? 1 : 0.35;
       const btnIcon = this._icons[item.key];
-      const iconYOffset = mobile ? 6 : 4;
-      const iconSize = mobile ? 26 : 22;
+      const iconYOffset = 4;
+      const iconSize = mobile ? 24 : 22;
       if (btnIcon && btnIcon.complete) {
         ctx.drawImage(btnIcon, bx + btnW / 2 - iconSize / 2, by + iconYOffset, iconSize, iconSize);
       } else {
@@ -1337,10 +1345,12 @@ class GameRenderer {
         ctx.fillText(item.icon, bx + btnW / 2, by + 6);
       }
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      ctx.fillStyle = '#ddd'; ctx.font = 'bold 10px sans-serif';
-      ctx.fillText(item.label, bx + btnW / 2, by + iconYOffset + iconSize + 4);
-      ctx.fillStyle = '#ffd700'; ctx.font = '10px sans-serif';
-      ctx.fillText(`${cost}g`, bx + btnW / 2, by + iconYOffset + iconSize + 17);
+      ctx.fillStyle = '#ffd700'; ctx.font = 'bold 10px sans-serif';
+      ctx.fillText(`${cost}g`, bx + btnW / 2, by + iconYOffset + iconSize + 4);
+      if (!mobile) {
+        ctx.fillStyle = '#ddd'; ctx.font = 'bold 9px sans-serif';
+        ctx.fillText(item.label, bx + btnW / 2, by + iconYOffset + iconSize + 17);
+      }
       ctx.globalAlpha = 1;
 
       this._uiPositions.buildButtons[item.key] = { x: bx, y: by, w: btnW, h: btnH };
@@ -1598,7 +1608,13 @@ class GameRenderer {
     ctx.fillText('?', helpX, helpY);
 
     if (this._helpOpen || this._hoverHelp) {
-      const lines = [
+      const isMobile = this._isMobile();
+      const lines = isMobile ? [
+        'Tap land: expand / attack',
+        'Drag: pan map',
+        'Pinch: zoom',
+        'Tap building: select to place',
+      ] : [
         'Click: expand/attack', CONFIG.BOATS_ENABLED ? 'Right-click: boat / cancel' : 'Right-click: cancel',
         'WASD: pan camera', 'Scroll: zoom',
         '1-2: select building', 'Tab: toggle leaderboard',
@@ -1608,7 +1624,7 @@ class GameRenderer {
       let maxW = 0;
       for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
       const hpW = maxW + 24, hpH = lines.length * 16 + 16;
-      const hpX = this.canvas.width - hpW - 10, hpY = 50;
+      const hpX = Math.max(8, this.canvas.width - hpW - 10), hpY = 50;
       ctx.fillStyle = 'rgba(31,41,55,0.95)'; ctx.beginPath(); ctx.roundRect(hpX, hpY, hpW, hpH, 8); ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(hpX, hpY, hpW, hpH, 8); ctx.stroke();
       ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#c9d1d9';

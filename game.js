@@ -71,7 +71,7 @@ class GameRenderer {
     this.ready = false;
     this.attackRatio = 0.2;
     this.placementMode = null;
-    this._leaderboardOpen = true;
+    this._leaderboardOpen = window.innerWidth >= 700;
     this._helpOpen = false;
     this._selectingLocation = false;
     this.totalLandTiles = 0;
@@ -599,7 +599,7 @@ class GameRenderer {
         e.preventDefault(); return;
       }
 
-      // Check help button
+      // Check help button (mostly mobile — desktop uses hover)
       const helpX = this.canvas.width - 30, helpY = 30;
       if ((cx - helpX) ** 2 + (cy - helpY) ** 2 < 225) {
         this._helpOpen = !this._helpOpen; e.preventDefault(); return;
@@ -622,6 +622,7 @@ class GameRenderer {
       const overBar = hBarInfo && hcy >= hBarInfo.y && hcy <= hBarInfo.y + hBarInfo.h && hcx >= hBarInfo.x && hcx <= hBarInfo.x + hBarInfo.w;
       const helpX = this.canvas.width - 30, helpY = 30;
       const overHelp = (hcx - helpX) ** 2 + (hcy - helpY) ** 2 < 225;
+      this._hoverHelp = overHelp;
       const overLeaderboard = hcx >= 10 && hcx < 310 && hcy >= 10 && hcy < 30;
 
       // Detect hovered build button (now outside the bar)
@@ -828,7 +829,34 @@ class GameRenderer {
       if (e.touches.length > 0) return;
       if (this._mouseIsDown && !this._didDrag) {
         const t = e.changedTouches[0];
-        const fakeEvent = { clientX: t.clientX, clientY: t.clientY, button: 0 };
+        const { cx: tcx, cy: tcy } = this.screenToCanvas(t.clientX, t.clientY);
+
+        // Tap on leaderboard header → toggle
+        if (tcx >= 10 && tcx < 310 && tcy >= 10 && tcy < 30) {
+          this._leaderboardOpen = !this._leaderboardOpen;
+          this._mouseIsDown = false; this._didDrag = false; return;
+        }
+        // Tap on build button → select placement mode
+        const bps = this._uiPositions.buildButtons || {};
+        for (const item of BUILD_ITEMS) {
+          const bp = bps[item.key];
+          if (bp && tcx >= bp.x && tcx <= bp.x + bp.w && tcy >= bp.y && tcy <= bp.y + bp.h) {
+            const cost = this.getBuildCost(item.key);
+            const gold = (this.playerData[0] || {}).gold || 0;
+            if (gold >= cost) {
+              this.placementMode = this.placementMode === item.key ? null : item.key;
+              this._buildPreview = null;
+            }
+            this._mouseIsDown = false; this._didDrag = false; return;
+          }
+        }
+        // Tap on help button
+        const helpX = this.canvas.width - 30, helpY = 30;
+        if ((tcx - helpX) ** 2 + (tcy - helpY) ** 2 < 225) {
+          this._helpOpen = !this._helpOpen;
+          this._mouseIsDown = false; this._didDrag = false; return;
+        }
+
         // Simulate click via mouseup handler logic
         const { gx, gy } = this.screenToGame(t.clientX, t.clientY);
         if (gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H && !this.gameOver) {
@@ -883,9 +911,11 @@ class GameRenderer {
   _getBottomBarLayout() {
     const mobile = this._isMobile();
     if (mobile) {
-      // Stack vertically on mobile: bar wider, buttons below
-      const bw = this.canvas.width - 16, bh = 60;
-      return { x: 8, y: this.canvas.height - bh - 80, w: bw, h: bh, mobile: true };
+      // Stack vertically: bar full-width, buttons below. Leave room for browser UI.
+      const bw = this.canvas.width - 16, bh = 56;
+      const buttonsH = 56;
+      const safeBottom = 30;
+      return { x: 8, y: this.canvas.height - bh - buttonsH - safeBottom - 4, w: bw, h: bh, mobile: true };
     }
     const bw = Math.min(440, this.canvas.width - 40), bh = 60;
     return { x: (this.canvas.width - bw) / 2, y: this.canvas.height - bh - 10, w: bw, h: bh, mobile: false };
@@ -1131,8 +1161,10 @@ class GameRenderer {
       if (textFade > 0) {
         ctx.globalAlpha = textFade;
 
-        // Dark backdrop box
-        const boxW = 560, boxH = 110;
+        // Dark backdrop box — adapt to viewport
+        const isMobile = this._isMobile();
+        const boxW = Math.min(560, this.canvas.width - 24);
+        const boxH = isMobile ? 130 : 110;
         const boxX = (this.canvas.width - boxW) / 2, boxY = this.canvas.height / 2 - boxH / 2 - 10;
         ctx.fillStyle = 'rgba(13, 17, 23, 0.85)';
         ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 12); ctx.fill();
@@ -1140,12 +1172,21 @@ class GameRenderer {
         ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 12); ctx.stroke();
 
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = 'bold 32px sans-serif'; ctx.fillStyle = '#ffd700';
-        ctx.fillText('Click anywhere to choose your start', this.canvas.width / 2, boxY + 30);
-        ctx.font = 'bold 18px sans-serif'; ctx.fillStyle = '#e6edf3';
-        ctx.fillText('Conquer 80% of the map to win. Good luck!', this.canvas.width / 2, boxY + 62);
-        ctx.font = '14px sans-serif'; ctx.fillStyle = '#8b949e';
-        ctx.fillText('Pick your starting location wisely', this.canvas.width / 2, boxY + 90);
+        const titleSz = isMobile ? 22 : 32;
+        const subSz = isMobile ? 14 : 18;
+        const hintSz = isMobile ? 12 : 14;
+        ctx.font = `bold ${titleSz}px sans-serif`; ctx.fillStyle = '#ffd700';
+        const titleText = isMobile ? 'Tap to choose your start' : 'Click anywhere to choose your start';
+        ctx.fillText(titleText, this.canvas.width / 2, boxY + (isMobile ? 32 : 30));
+        ctx.font = `bold ${subSz}px sans-serif`; ctx.fillStyle = '#e6edf3';
+        if (isMobile) {
+          ctx.fillText('Conquer 80% of the map to win.', this.canvas.width / 2, boxY + 62);
+          ctx.fillText('Good luck!', this.canvas.width / 2, boxY + 84);
+        } else {
+          ctx.fillText('Conquer 80% of the map to win. Good luck!', this.canvas.width / 2, boxY + 62);
+        }
+        ctx.font = `${hintSz}px sans-serif`; ctx.fillStyle = '#8b949e';
+        ctx.fillText('Pick your starting location wisely', this.canvas.width / 2, boxY + (isMobile ? 110 : 90));
         ctx.globalAlpha = 1;
       }
 
@@ -1267,7 +1308,7 @@ class GameRenderer {
     this._uiPositions.buildButtons = {};
     const mobile = bar.mobile;
     const btnW = mobile ? (bar.w / BUILD_ITEMS.length) - 4 : 54;
-    const btnH = mobile ? 60 : bar.h;
+    const btnH = mobile ? 56 : bar.h;
     const btnStartX = mobile ? bar.x : bar.x + bar.w + 6;
     const btnStartY = mobile ? bar.y + bar.h + 8 : bar.y;
     for (let i = 0; i < BUILD_ITEMS.length; i++) {
@@ -1556,19 +1597,22 @@ class GameRenderer {
     ctx.fillStyle = '#8b949e'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('?', helpX, helpY);
 
-    if (this._helpOpen) {
-      const hpX = this.canvas.width - 220, hpY = 50, hpW = 200, hpH = 120;
-      ctx.fillStyle = 'rgba(31,41,55,0.95)'; ctx.beginPath(); ctx.roundRect(hpX, hpY, hpW, hpH, 8); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(hpX, hpY, hpW, hpH, 8); ctx.stroke();
-      ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = '10px monospace'; ctx.fillStyle = '#c9d1d9';
+    if (this._helpOpen || this._hoverHelp) {
       const lines = [
         'Click: expand/attack', CONFIG.BOATS_ENABLED ? 'Right-click: boat / cancel' : 'Right-click: cancel',
         'WASD: pan camera', 'Scroll: zoom',
         '1-2: select building', 'Tab: toggle leaderboard',
         'Esc: cancel placement',
-        '■ Plains  ■ Highland  ■ Mountain'
       ];
-      lines.forEach((l, i) => ctx.fillText(l, hpX + 10, hpY + 10 + i * 13));
+      ctx.font = 'bold 11px sans-serif';
+      let maxW = 0;
+      for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
+      const hpW = maxW + 24, hpH = lines.length * 16 + 16;
+      const hpX = this.canvas.width - hpW - 10, hpY = 50;
+      ctx.fillStyle = 'rgba(31,41,55,0.95)'; ctx.beginPath(); ctx.roundRect(hpX, hpY, hpW, hpH, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(hpX, hpY, hpW, hpH, 8); ctx.stroke();
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillStyle = '#c9d1d9';
+      lines.forEach((l, i) => ctx.fillText(l, hpX + 12, hpY + 10 + i * 16));
     }
 
     // --- Boat count (top, near status) ---

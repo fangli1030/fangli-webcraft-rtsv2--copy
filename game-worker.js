@@ -355,7 +355,7 @@ function generateTroops(dt) {
     let max = maxTroopsForTiles(ps.cellCount, ps.cityCount);
     if (ps.isBot) max = Math.floor(max * (isSpectateMode ? 1.0 : 0.7));
     if (ps.troops >= max) { ps.troops = max; continue; }
-    let toAdd = (2.5 + Math.pow(Math.max(0, ps.troops), 0.65) / 4.8) * (1 - ps.troops / max) * ticks;
+    let toAdd = (3.25 + Math.pow(Math.max(0, ps.troops), 0.65) / 3.7) * (1 - ps.troops / max) * ticks;
     if (ps.isBot && !isSpectateMode) toAdd *= 0.8;
     if (isSpectateMode) toAdd *= 3;
     ps.troops = Math.min(ps.troops + toAdd, max);

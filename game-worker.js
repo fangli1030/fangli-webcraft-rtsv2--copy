@@ -230,7 +230,7 @@ function processExpansions() {
 
       const target = atk.target;
       let captured = 0;
-      let capturebudget = target === -1 ? CELLS_PER_TICK * 3 : CELLS_PER_TICK;
+      let capturebudget = target === -1 ? CELLS_PER_TICK * 3 : CELLS_PER_TICK * 2;
       // Each attack gets a slice of the budget proportional to attack count
       capturebudget = Math.max(1, Math.floor(capturebudget / Math.max(1, ps.attacks.length)));
 

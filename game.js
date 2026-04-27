@@ -1236,20 +1236,24 @@ class GameRenderer {
     ctx.fillText(st, bar.x + 12, row0Y + 10);
     const stW = ctx.measureText(st).width;
 
-    // Outbound troops pill
-    const outbound = Math.floor(ps.attackTroops || 0) + (ps.beachheads || []).reduce((s, b) => s + Math.floor(b.troops), 0);
-    const outStr = `Outbound: ${formatTroops(outbound)}`;
-    ctx.font = 'bold 11px sans-serif';
-    const outW = ctx.measureText(outStr).width + 14;
-    const outX = bar.x + 12 + stW + 12;
-    const outH = 18;
-    this._outboundPillRect = { x: outX, y: row0Y + 1, w: outW, h: outH };
-    ctx.fillStyle = outbound > 0 ? 'rgba(255,102,68,0.15)' : 'rgba(255,255,255,0.05)';
-    ctx.beginPath(); ctx.roundRect(outX, row0Y + 1, outW, outH, 4); ctx.fill();
-    ctx.strokeStyle = outbound > 0 ? '#ff6644' : 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(outX, row0Y + 1, outW, outH, 4); ctx.stroke();
-    ctx.fillStyle = outbound > 0 ? '#ff8866' : '#9ca3af';
-    ctx.fillText(outStr, outX + 7, row0Y + 10);
+    // Outbound troops pill (desktop only — mobile is too cramped)
+    if (!bar.mobile) {
+      const outbound = Math.floor(ps.attackTroops || 0) + (ps.beachheads || []).reduce((s, b) => s + Math.floor(b.troops), 0);
+      const outStr = `Outbound: ${formatTroops(outbound)}`;
+      ctx.font = 'bold 11px sans-serif';
+      const outW = ctx.measureText(outStr).width + 14;
+      const outX = bar.x + 12 + stW + 12;
+      const outH = 18;
+      this._outboundPillRect = { x: outX, y: row0Y + 1, w: outW, h: outH };
+      ctx.fillStyle = outbound > 0 ? 'rgba(255,102,68,0.15)' : 'rgba(255,255,255,0.05)';
+      ctx.beginPath(); ctx.roundRect(outX, row0Y + 1, outW, outH, 4); ctx.fill();
+      ctx.strokeStyle = outbound > 0 ? '#ff6644' : 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(outX, row0Y + 1, outW, outH, 4); ctx.stroke();
+      ctx.fillStyle = outbound > 0 ? '#ff8866' : '#9ca3af';
+      ctx.fillText(outStr, outX + 7, row0Y + 10);
+    } else {
+      this._outboundPillRect = null;
+    }
 
     if (this.totalLandTiles > 0) {
       const myPct = (ps.cellCount || 0) / this.totalLandTiles;

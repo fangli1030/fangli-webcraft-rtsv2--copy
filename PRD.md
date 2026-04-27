@@ -83,6 +83,7 @@ Open `http://localhost:3000`. No build, no install, no env vars. Full setup deta
 
 ## Screenshots
 
-![Home page](screenshots/home-desktop.png)
-![Home mobile](screenshots/home-mobile.png)
-![Gameplay](screenshots/gameplay-desktop.png)
+![Home page (desktop)](screenshots/home-desktop.png)
+![Gameplay (desktop)](screenshots/gameplay-desktop.png)
+![Home page (mobile)](screenshots/home-mobile.png)
+![Gameplay (mobile)](screenshots/gameplay-mobile.png)

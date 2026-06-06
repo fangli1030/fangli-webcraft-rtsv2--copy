@@ -1,89 +1,209 @@
 # Meta RTS — Product Requirements Document
 
-**Category:** Game Dev
-**Live URL:** https://anujvarma-webcraft-rts-claude.vercel.app
-**Repo:** codimango/anujvarma-webcraft-rts-claude
+## 1. Overview
 
-## What it is
+Meta RTS is a real-time strategy territory-control game running entirely in the browser. The player picks a starting location on a map of the United States, then competes against 20 AI bots to conquer 80% of the continent. The full match takes 5–10 minutes with no install and no signup — instant gameplay designed for a quick strategy fix in a browser tab.
 
-Meta RTS is a real-time strategy territory-control game running entirely in the browser. The player picks a starting location on a map of the United States, then competes against 20 AI bots to conquer 80% of the continent. Inspired by titles like OpenFront and Risk, but built from scratch with vanilla web technologies — no game engine, no framework, no build step.
+**Product**: Browser-based real-time strategy game
+**Stack**: HTML5, CSS3, vanilla JavaScript ES modules, Canvas 2D API, Web Workers. No frameworks, no build step.
+**Scope**: Single-page application. No backend, no auth, no persistence.
+**Design viewport**: 1440×900 (desktop primary), 390×844 (mobile)
+**Content shell**: Full viewport canvas, HUD docked to bottom edge
+**Root font size**: `16px` (browser default)
 
-The entire game is roughly 1,700 lines of hand-written JavaScript. Simulation runs in a Web Worker so the main thread stays at 60fps even when ~30 tiles per tick are being claimed across 21 active players.
+## 2. Design Language
 
-## Who it's for
+### Colors
 
-Anyone who wants a quick strategy fix in a browser tab — no install, no signup, instant gameplay. The full match takes 5–10 minutes. Designed for desktop primarily, with touch and pinch-zoom support for mobile.
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--bg-dark` | `#0a0a0a` | Page background, HUD background |
+| `--bg-light` | `#f5f5f0` | Light theme surfaces (unused, dark-only) |
+| `--text-primary` | `#ffffff` | Primary text, HUD labels |
+| `--text-secondary` | `rgba(255,255,255,0.6)` | Secondary text, metadata |
+| `--accent-red` | `#ff4444` | Low troop warning, attack indicators |
+| `--accent-green` | `#44ff44` | Optimal troop level, success states |
+| `--accent-yellow` | `#ffcc44` | Near-capacity warning |
+| `--accent-gold` | `#ffd700` | Gold currency, city icons |
+| `--border` | `rgba(255,255,255,0.1)` | HUD borders, dividers |
+| `--player-colors` | 21 distinct hues | Per-player territory fills (4-stop gradient per player) |
 
-## Why this fits Game Dev
+**Theme**: Dark only. Territory colors use a 4-stop gradient (border → interior) for readable depth.
 
-The brief asks for "web-based games built with modern web technologies" and explicitly calls out "physics simulations" and "interactive storytelling." This entry pushes on technical ambition for what a single-file vanilla web game can achieve:
+### Typography
 
-- **~1.16M tile state machine** simulated in real time on a Web Worker
-- **Diff-based main↔worker messaging** with `Int32Array` transferables — only changed tiles get sent each tick (typically 10–60 tiles vs the full 1.16M)
-- **Bot AI** with three strategy archetypes (aggressive, defensive, balanced) running parallel decision loops
-- **Pixel-perfect canvas rendering** at any zoom level using a buffer canvas + per-tile color gradients per player
-- **Procedural cloud intro** — 60+ animated cloud puffs with radial gradients, drifting outward to reveal the map
+| Role | Font | Size | Weight | Transform |
+|------|------|------|--------|-----------|
+| Display | System sans-serif | `clamp(2rem, 5vw, 4rem)` | 700 | uppercase |
+| HUD Heading | System sans-serif | `14px` | 600 | uppercase |
+| HUD Body | System sans-serif | `12px` | 400 | — |
+| HUD Label | System sans-serif | `10px` | 500 | uppercase |
 
-## Design choices
+System stack: SF Pro (macOS), Segoe UI (Windows), Roboto (Android), sans-serif fallback. No web font loaded.
 
-A few decisions were intentional and worth calling out:
+### Visual Treatments
 
-**1. Cinematic intro instead of a menu screen.** When the player clicks Play, the camera zooms in while procedurally-generated clouds clear outward from the center. No transition feels more "you've arrived" than this — it sets the stakes before a single tile is placed.
+| Element | Spec |
+|---------|------|
+| Territory fill | 4-stop radial gradient per player (border color → mid → interior → highlight) for depth without flat color blocks |
+| Troop bar | Horizontal gradient red → green → yellow mapped to troop capacity percentage |
+| Cloud intro | 60+ procedurally generated radial-gradient puffs drifting outward from center |
+| HUD | Fixed bottom bar, `backdrop-filter: blur(10px)`, semi-transparent black, never overlaps gameplay |
+| Icons | Hand-authored SVG (city, fort, troop, gold) drawn to canvas via `drawImage` for crisp rendering at any zoom |
+| Scrollbar | Hidden (canvas-based, no DOM scroll) |
 
-**2. The HUD lives at the bottom and never overlaps gameplay.** All status info (territory progress, troop bar, gold, build buttons) sits in a single bar at the bottom edge so the map stays unobstructed. Tooltips on hover instead of permanent labels — the screen is for the world, not the UI.
+### Z-Index Stack
 
-**3. Color gradient on the troop bar.** The bar fades from red (low troops, fast regen) → green (sweet spot at ~50% capacity) → yellow (near cap, diminishing returns). The gradient is the math, made visible. No need to read a number to know whether you should attack or wait.
+`Canvas (map) → HUD (bottom bar) → Modals (victory screen) → Tooltips`
 
-**4. Hand-drawn SVG iconography.** Every icon (city as a cluster of medieval cabins, fort as a watchtower, troop as crossed swords with gold pommels, gold as a coin) was hand-authored in SVG rather than pulled from an icon set. Crisp at every zoom level, themed consistently, and on-brand for a strategy game.
+### Interactions
 
-**5. Player territory in vivid color, wilderness muted.** A four-stop blend (border → interior) gives each player territory readable depth without flattening into a solid color block. You can see where someone's about to push.
+| # | Trigger | Behavior | Duration | Easing |
+|---|---------|----------|----------|--------|
+| 1 | Click Play | Clouds clear outward, camera zooms to map | 2s | `cubic-bezier(0.165, 0.84, 0.44, 1)` |
+| 2 | Click land tile | Claim territory, spawn initial troops | instant | — |
+| 3 | Click enemy tile | Launch attack, troops animate toward target | variable | linear per tick |
+| 4 | Hover HUD button | Tooltip appears above button | 0.2s | ease-out |
+| 5 | Troop bar update | Width and gradient position animate | 0.3s | ease-out |
+| 6 | Victory at 80% | Modal scales in with "Victory!" | 0.4s | `cubic-bezier(0.175, 0.885, 0.32, 1.275)` |
 
-**6. 80% threshold marker on the territory bar.** A vertical white tick at the 80% point so the player always knows exactly how close victory is — no math required.
+### Responsive Breakpoints
 
-## How to run it
+| Breakpoint | Changes |
+|-----------|---------|
+| ≤768px | Touch controls: single-finger pan, tap to attack, two-finger pinch-zoom. HUD buttons enlarge to 44px minimum touch target. |
+| ≤480px | HUD condenses to icon-only buttons. Territory percentage and gold move to top bar. |
 
-```bash
-npx serve -l 3000
+## 3. Repository Layout
+
+The single source of truth for the routes the site exposes, the files on disk that implement them, and the assets they reference.
+
+```
+anujvarma-webcraft-rts-claude/
+├── index.html                      ← Single-page game shell
+├── style.css                       ← All styles (HUD, modals, layout)
+├── game-worker.js                  ← Simulation engine (Web Worker)
+├── js/
+│   ├── main.js                     ← Entry point, init, game loop
+│   ├── renderer.js                 ← Canvas drawing (terrain, territories, HUD)
+│   ├── hud.js                      ← HUD state and DOM updates
+│   ├── grid.js                     ← Tile grid and coordinate helpers
+│   ├── colors.js                   ← Player color palette generation
+│   ├── overlays.js                 ← Modal and tooltip rendering
+│   ├── tutorial.js                 ← Onboarding overlay logic
+│   └── config.js                   ← Game constants and tuning
+├── maps/
+│   └── usa/
+│       ├── map.bin                 ← 1440×810 binary terrain (1 byte/tile)
+│       └── manifest.json           ← Map metadata
+├── icons/
+│   ├── city.svg                    ← City building icon
+│   ├── defense_post.svg            ← Fort icon
+│   ├── gold.svg                    ← Gold coin icon
+│   └── troop.svg                   ← Troop/swords icon
+├── tools/
+│   ├── generate_map.py             ← Elevation → binary converter
+│   ├── build_europe_map.py         ← Europe map builder
+│   ├── build_india_map.py          ← India map builder
+│   └── build_india_small.py        ← Small India variant
+├── screenshots/                    ← PRD reference images
+├── vercel.json                     ← Static hosting config
+├── package.json                    ← Empty (no dependencies)
+├── site.toml                       ← Site metadata
+├── PRD.md
+└── SETUP.md
 ```
 
-Open `http://localhost:3000`. No build, no install, no env vars. Full setup details in `SETUP.md`.
+| Path | Size | Purpose |
+|------|------|---------|
+| `index.html` | ~1660 lines | Single-page shell with canvas, HUD markup, and inline critical CSS |
+| `style.css` | ~450 lines | HUD styles, modal styles, responsive layout, animations |
+| `game-worker.js` | ~520 lines | Tile simulation, bot AI, attack resolution, runs off main thread |
+| `js/main.js` | ~280 lines | Initialization, input handling, main↔worker messaging |
+| `js/renderer.js` | ~340 lines | Canvas draw calls for terrain, territory gradients, icons, animations |
+| `js/hud.js` | ~180 lines | Territory %, troop bar, gold counter, build button state |
+| `js/grid.js` | ~90 lines | Coordinate conversion, neighbor lookup, bounds checking |
+| `js/colors.js` | ~60 lines | 21-player color palette with 4-stop gradient generation |
+| `maps/usa/map.bin` | 1.16 MB | Binary terrain data (1440×810 tiles, 1 byte per tile) |
+| `icons/*.svg` | 4 files | Hand-authored SVG icons for city, fort, troop, gold |
+| `tools/*.py` | 4 files | Offline map preprocessing (Pillow + NumPy) |
 
-## Tech stack
+**Constraints**: Zero npm dependencies at runtime. Static deploy to Vercel. No build step. Client-side only.
 
-- **Vanilla HTML / CSS / JavaScript** — zero frameworks, zero npm dependencies at runtime
-- **Canvas 2D API** — all rendering (terrain, HUD, icons, animations)
-- **Web Workers** — game simulation off the main thread; main↔worker via `postMessage` with `Int32Array.buffer` transferables
-- **SVG icons** — loaded as `Image` and drawn via `ctx.drawImage`
-- **Binary map files** — 1 byte per tile (1440×810 = 1.16 MB) decoded into `Uint8Array` on load
-- **Hosted on Vercel** as a static site
-- **Map preprocessing**: Python + Pillow + NumPy (`tools/`) for offline elevation-data → binary terrain conversion
+**Performance**: Web Worker simulation keeps main thread at 60fps. Diff-based messaging sends only changed tiles (typically 10–60 per tick vs full 1.16M). `Int32Array` transferables avoid copy overhead. Canvas double-buffering for smooth zoom/pan.
 
-## Asset sources
+**Browser support**: Chrome/Edge 100+, Firefox 95+, Safari 15+. Requires Canvas 2D, Web Workers, ES modules.
 
-- **Map elevation data** — derived from public North America heightmap in OpenFrontIO assets (cropped to continental US + southern Canada + northern Mexico, resampled to 1440×810, repackaged as `maps/usa/map.bin`)
-- **All SVG icons** — hand-authored for this project: `icons/city.svg`, `icons/defense_post.svg`, `icons/gold.svg`, `icons/troop.svg`. Multiple alternate concepts also live in `icons/` for reference.
-- **Fonts** — system sans-serif (SF Pro on macOS, Segoe UI on Windows, etc.). No web font loaded.
-- **No third-party JavaScript libraries** at runtime.
+## 4. Page Specifications
 
-## Responsive design
+### 4.1 Game Page (single route)
 
-- **Desktop**: WASD pan, scroll zoom, click to attack, right-click to cancel
-- **Mobile**: single-finger pan, tap to attack, two-finger pinch-zoom
-- Camera clamps to map edges at every zoom level so the player never sees off-map black
-- HUD scales to viewport width
+| Section | Layout | Content | Behavior |
+|---------|--------|---------|----------|
+| Intro screen | Full viewport overlay | "Meta RTS" title, "Play" button, subtitle | Click Play triggers cloud-clear animation (2s), then reveals map |
+| Map canvas | Full viewport below HUD | 1440×810 tile grid rendered to canvas with pan/zoom | WASD or drag to pan, scroll or pinch to zoom, click to attack/claim |
+| HUD bar | Fixed bottom, full width, 64px height | Left: territory % with 80% marker. Center: troop bar (gradient). Right: gold counter, City button, Fort button | Updates every tick. Buttons enable/disable based on gold. Tooltips on hover. |
+| Victory modal | Centered overlay | "Victory!" heading, final stats, "Play Again" button | Appears when player reaches 80% territory. Scales in with spring easing. |
+| Tutorial overlay | Top-center toast | Contextual hints ("Click land to start", "Click enemy to attack") | Shows on first play, dismisses after action completed |
 
-## Gameplay loop summary
-
+**Gameplay loop**:
 1. Cinematic clouds reveal the map
-2. Click anywhere on land to plant your starting territory
+2. Click anywhere on land to plant starting territory
 3. Click unclaimed tiles to take wilderness
 4. Click enemy territory to attack — multiple simultaneous attacks supported
-5. Spend gold on Cities (+500 troop cap) and Forts (4× enemy cost in radius)
-6. Reach 80% map control to win → "Victory!" screen with Play Again button
+5. Spend gold on Cities (+500 troop cap) and Forts (4× enemy attack cost in radius)
+6. Reach 80% map control to win
 
-## Screenshots
+**Bot AI**: 20 bots with three archetypes — aggressive (prioritizes attacks), defensive (prioritizes forts), balanced (mixed). Each runs independent decision loop every ~500ms.
+
+## 5. User Stories
+
+Ordered by dependency: structure → styling → interactivity → polish.
+
+### Phase 1: Structure
+
+| ID | Story | Acceptance |
+|----|-------|------------|
+| US-1 | Add HTML shell with canvas and HUD markup | Page loads with full-viewport canvas element and bottom HUD bar containing territory %, troop bar, gold, and two build buttons. |
+| US-2 | Add Web Worker for simulation | Game logic runs in `game-worker.js`. Main thread stays responsive during simulation. |
+| US-3 | Add map binary loader | `maps/usa/map.bin` loads on startup and renders as terrain on canvas. |
+
+### Phase 2: Styling
+
+| ID | Story | Acceptance |
+|----|-------|------------|
+| US-4 | Style HUD with dark translucent bar | HUD appears as fixed bottom bar with blurred background. Text is white, readable over map. |
+| US-5 | Style troop bar with color gradient | Troop bar shows red → green → yellow gradient. Position along gradient matches current troop percentage. |
+| US-6 | Style territory with player gradients | Each player's territory renders with 4-stop radial gradient giving visible depth. Borders are distinct from interior. |
+
+### Phase 3: Interactivity
+
+| ID | Story | Acceptance |
+|----|-------|------------|
+| US-7 | Make cloud intro animate on Play | Clicking Play triggers 60+ cloud puffs drifting outward over 2 seconds to reveal map beneath. |
+| US-8 | Make map pannable and zoomable | WASD keys pan the camera. Mouse wheel zooms. Camera clamps to map edges at every zoom level. |
+| US-9 | Make tiles clickable to claim and attack | Clicking unclaimed land claims it. Clicking enemy territory launches attack. Multiple attacks can be active simultaneously. |
+| US-10 | Make HUD update in real time | Territory percentage, troop bar, and gold counter update every simulation tick without page refresh. |
+| US-11 | Make City and Fort buttons build structures | Clicking City button (when affordable) places city on selected tile, increasing troop cap. Fort button places fort, increasing defense cost for enemies in radius. |
+| US-12 | Make victory modal appear at 80% | When territory bar reaches the 80% marker, "Victory!" modal scales in with Play Again button. |
+
+### Phase 4: Polish
+
+| ID | Story | Acceptance |
+|----|-------|------------|
+| US-13 | Add touch support for mobile | Single-finger drag pans, tap attacks, two-finger pinch zooms. HUD buttons are minimum 44px. |
+| US-14 | Add tutorial hints for first play | Contextual toasts appear guiding first-time player through starting territory, attacking, and building. Dismiss after action. |
+| US-15 | Add 80% threshold marker to territory bar | Vertical white tick mark appears at 80% position on territory progress bar. |
+| US-16 | Ensure 60fps during heavy simulation | With 21 players active and ~30 tiles changing per tick, frame rate stays at 60fps on desktop Chrome. |
+
+---
+
+# Appendix: Screenshots
 
 ![Home page (desktop)](screenshots/home-desktop.png)
+
 ![Gameplay (desktop)](screenshots/gameplay-desktop.png)
+
 ![Home page (mobile)](screenshots/home-mobile.png)
+
 ![Gameplay (mobile)](screenshots/gameplay-mobile.png)

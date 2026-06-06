@@ -181,7 +181,7 @@ export class GameRenderer {
 
     this.waterC = buildWaterColors(this.terrain, GRID_W, GRID_H);
 
-    this.worker = new Worker('game-worker.js?v=3');
+    this.worker = new Worker('game-worker.js', { type: 'module' });
     this.worker.onerror = (e) => console.error('[worker error]', e);
     this.worker.onmessage = (e) => this._handleWorkerMessage(e.data);
     this.worker.postMessage({

@@ -1,5 +1,9 @@
 # Setup & Deployment
 
+## Walkthrough video
+
+Screen capture of the game: https://pxl.cl/b4SkM
+
 ## Prerequisites
 
 - Node.js >= 14 (only used to run a static file server — no compile step)
@@ -21,14 +25,24 @@ That's it — no `npm install`, no env vars, no backend.
 
 ```
 .
-├── index.html          # Entry point — minimal HTML shell
-├── style.css           # Landing overlay styles only (in-game UI is canvas-rendered)
-├── game.js             # Main thread: rendering, input, HUD, animations
+├── index.html          # Entry point — loads js/main.js as ES module
+├── style.css           # Landing overlay styles (in-game UI is canvas-rendered)
+├── js/                 # Modularized client code (ES modules)
+│   ├── main.js         # Entry point: landing page, Play/Tutorial buttons
+│   ├── config.js       # Constants, maps, shared state, utility functions
+│   ├── colors.js       # Pre-computed terrain/player/border color palettes
+│   ├── grid.js         # Border detection, defended map, distance map, cell painting
+│   ├── overlays.js     # Game-world overlays: cities, forts, boats, labels (zoom-space)
+│   ├── tutorial.js     # Tutorial steps, completion checks, tooltip rendering
+│   ├── input.js        # Mouse, keyboard, touch, wheel event handling
+│   ├── hud.js          # Screen-space UI: bottom bar, leaderboard, tooltips, game-over
+│   └── renderer.js     # Orchestrator: worker comms, camera, render loop
 ├── game-worker.js      # Web Worker: game simulation, bot AI, expansion logic
 ├── icons/              # SVG iconography (city, defense_post, gold, troop)
-├── maps/usa/           # USA map binary + manifest with nation spawn points
-│   ├── map.bin         # 1 byte/tile terrain data (1440x810 = 1.16 MB)
-│   └── manifest.json   # Map dimensions, land tile count, nation spawn coords
+├── maps/               # Map binaries + manifests with nation spawn points
+│   ├── usa/            # USA map (1440×810)
+│   ├── indiahd/        # India HD map (1440×1800)
+│   └── europe/         # Europe map (1520×960)
 ├── tools/              # Offline map generation scripts (Python)
 └── vercel.json         # Vercel static deployment config
 ```

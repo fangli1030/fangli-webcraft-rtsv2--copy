@@ -34,3 +34,7 @@ device = "mobile"
 route = "/"
 file = "screenshots/gameplay-desktop.png"
 device = "desktop"
+
+[task]
+format = "web_craft"
+workstream = "web_craft"

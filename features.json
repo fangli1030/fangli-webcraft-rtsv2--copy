@@ -1,0 +1,35 @@
+{
+  "site": "anujvarma-webcraft-rts-v2",
+  "rubrics": [
+    {
+      "id": 1,
+      "criterion": "Clicking unclaimed land claims territory and clicking opponent territory launches attacks with multiple simultaneous attacks active and no page reload",
+      "type": "CUJ",
+      "priority": "must-have"
+    },
+    {
+      "id": 2,
+      "criterion": "Map viewport pans via drag or W/A/S/D and zooms via wheel or pinch from fitted minimum to 8x with camera clamping so no empty area beyond the map appears",
+      "type": "CUJ",
+      "priority": "must-have"
+    },
+    {
+      "id": 3,
+      "criterion": "Bottom control bar shows live status IDLE / TAKING WILDERNESS / ATTACKING {name}, troop bar with red→green→gold gradient, gold pill with +/min income, and territory percentage with thin 80% tick",
+      "type": "CUJ",
+      "priority": "must-have"
+    },
+    {
+      "id": 4,
+      "criterion": "City and Fort build buttons display dynamic gold cost, enter placement mode on click or hotkeys 1/2 showing PLACING CITY/FORT banner, and place only on owned territory deducting gold with Esc to cancel",
+      "type": "CUJ",
+      "priority": "must-have"
+    },
+    {
+      "id": 5,
+      "criterion": "Entry shows Meta RTS title with Enter your name field and Play/Tutorial actions; clicking Play triggers ~3s cloud drift outward with camera ease to starting location prompt and reaching 80% ownership shows Victory! dialog with spring scale-in and Play Again",
+      "type": "design",
+      "priority": "must-have"
+    }
+  ]
+}
